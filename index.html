@@ -95,7 +95,7 @@
   <div v-else-if="currentMode === 'study'">
     <div class="flex justify-end mb-3">
       <div class="flex gap-1 bg-amber-50 p-1 rounded-xl border border-amber-200 text-xs font-bold">
-        <button @click="setRate(0.5)" :class="currentRate === 0.5 ? 'bg-amber-500 text-white' : 'text-gray-600'" class="px-2 py-1 rounded-lg">🐢 0.5x</button>
+        <button @click="setRate(0.75)" :class="currentRate === 0.75 ? 'bg-amber-500 text-white' : 'text-gray-600'" class="px-2 py-1 rounded-lg">🐢 0.75x</button>
         <button @click="setRate(1.0)" :class="currentRate === 1.0 ? 'bg-amber-500 text-white' : 'text-gray-600'" class="px-2 py-1 rounded-lg">🚶 1.0x</button>
         <button @click="setRate(1.25)" :class="currentRate === 1.25 ? 'bg-amber-500 text-white' : 'text-gray-600'" class="px-2 py-1 rounded-lg">🐰 1.25x</button>
       </div>
@@ -187,7 +187,7 @@
         <span v-for="(letter, i) in spelledLetters" :key="i"
               @click="removeLetter(i)"
               class="w-10 h-10 bg-white text-emerald-700 border-2 border-emerald-400 rounded-xl font-black text-lg flex items-center justify-center cursor-pointer shadow-sm active:scale-95">
-          {{ letter }}
+          {{ letter === ' ' ? '␣' : letter }}
         </span>
       </div>
 
@@ -197,7 +197,7 @@
                 @click="pickLetter(item)"
                 :class="item.used ? 'opacity-20 cursor-not-allowed bg-gray-200' : 'bg-emerald-500 text-white hover:bg-emerald-600 active:scale-90 shadow-md'"
                 class="w-10 h-10 rounded-xl font-black text-lg flex items-center justify-center transition">
-          {{ item.letter }}
+          {{ item.letter === ' ' ? '␣' : item.letter }}
         </button>
       </div>
 
@@ -214,7 +214,7 @@
     </div>
   </div>
 
-  <!-- ================= 關卡 4：決戰 Boss 模式 (手寫板 + 45秒暫停機制) ================= -->
+  <!-- ================= 關卡 4：決戰 Boss 模式 (手寫板 + 空白鍵支援) ================= -->
   <div v-else-if="currentMode === 'boss'">
     <!-- 戰鬥雙方血量條 -->
     <div class="space-y-2 mb-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
@@ -238,7 +238,7 @@
         </div>
       </div>
 
-      <!-- 45 秒倒數計時條（手寫時凍結提示） -->
+      <!-- 45 秒倒數計時條（動筆時顯示凍結狀態） -->
       <div v-if="bossGameState === 'playing'">
         <div class="flex justify-between text-[11px] font-bold text-gray-500 mb-0.5">
           <span class="flex items-center gap-1">
@@ -265,7 +265,7 @@
         </h2>
 
         <div class="inline-block bg-purple-200/80 text-purple-900 px-3 py-0.5 rounded-full text-xs font-bold tracking-widest mt-1">
-          提示：{{ currentBossQuestion.hint }} (共 {{ currentBossQuestion.word.length }} 字)
+          提示：{{ currentBossQuestion.hint }} (共 {{ currentBossQuestion.word.length }} 字元)
         </div>
 
         <p class="text-xs text-gray-500 italic mt-1 bg-white/70 p-1.5 rounded-lg border border-purple-100">
@@ -273,37 +273,37 @@
         </p>
       </div>
 
-      <!-- 目前已辨識的拼字呈現區 (不彈出鍵盤) -->
+      <!-- 目前已辨識的拼字呈現區 (含空白、倒退、清空按鈕) -->
       <div class="bg-white border-2 border-purple-300 rounded-2xl p-2.5 flex items-center justify-between shadow-sm">
-        <div class="flex items-center gap-1 pl-2">
-          <span class="text-xs font-bold text-gray-400">拼字：</span>
-          <span class="text-2xl font-black text-purple-900 tracking-wider font-mono">
+        <div class="flex items-center gap-1 pl-2 overflow-x-auto">
+          <span class="text-xs font-bold text-gray-400 shrink-0">拼字：</span>
+          <span class="text-xl sm:text-2xl font-black text-purple-900 tracking-wider font-mono whitespace-nowrap">
             {{ bossTypedWord || '_____' }}
           </span>
-          <span v-if="isRecognizing" class="text-xs text-purple-500 animate-pulse font-bold">（辨識中...）</span>
+          <span v-if="isRecognizing" class="text-xs text-purple-500 animate-pulse font-bold shrink-0">（辨識中...）</span>
         </div>
 
         <div class="flex gap-1.5 shrink-0 ml-2">
-        <!-- 新增：單字間隔空白鍵 -->
-        <button @click="addSpaceToBossWord" 
-               type="button"
-               class="bg-purple-100 hover:bg-purple-200 active:scale-95 text-purple-900 font-bold px-3 py-1.5 rounded-xl text-xs transition">
-          ␣ 空白
-        </button>
-        <button @click="backspaceBossWord" 
-                type="button"
-               class="bg-amber-100 hover:bg-amber-200 active:scale-95 text-amber-900 font-bold px-3 py-1.5 rounded-xl text-xs transition">
-          ⌫ 倒退
-        </button>
-        <button @click="clearBossWord" 
-                type="button"
-                class="bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-600 font-bold px-3 py-1.5 rounded-xl text-xs transition">
-         清空
-        </button>
-      </div>
+          <!-- 支援片語的專用空白鍵 -->
+          <button @click="addSpaceToBossWord" 
+                  type="button"
+                  class="bg-purple-100 hover:bg-purple-200 active:scale-95 text-purple-900 font-bold px-3 py-1.5 rounded-xl text-xs transition">
+            ␣ 空白
+          </button>
+          <button @click="backspaceBossWord" 
+                  type="button"
+                  class="bg-amber-100 hover:bg-amber-200 active:scale-95 text-amber-900 font-bold px-3 py-1.5 rounded-xl text-xs transition">
+            ⌫ 倒退
+          </button>
+          <button @click="clearBossWord" 
+                  type="button"
+                  class="bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-600 font-bold px-3 py-1.5 rounded-xl text-xs transition">
+            清空
+          </button>
+        </div>
       </div>
 
-      <!-- 手寫板畫布區域 (Apple Pencil / 手指專用) -->
+      <!-- 手寫板畫布區域 (Apple Pencil / 手指專用，零鍵盤干擾) -->
       <div class="bg-purple-100/50 border-2 border-dashed border-purple-300 rounded-2xl p-2 flex flex-col items-center relative">
         <div class="flex justify-between w-full px-2 text-[11px] font-bold text-purple-700 mb-1">
           <span>✍️ 在此手寫字母（寫完停筆自動辨識）：</span>
@@ -342,7 +342,7 @@
     <div v-else-if="bossGameState === 'victory'" class="text-center py-10 space-y-3">
       <div class="text-6xl animate-bounce">👑 🏆 ⚔️</div>
       <h2 class="text-2xl sm:text-3xl font-black text-amber-500">大勝利！巨龍被你擊敗了！</h2>
-      <p class="text-gray-600 text-sm">你成功看著中文完整手寫背出所有單字，獲得 10 顆星幣！</p>
+      <p class="text-gray-600 text-sm">你成功看著中文完整手寫背出所有單字與片語，獲得 10 顆星幣！</p>
       <button @click="startBossBattle" class="bg-green-500 hover:bg-green-600 text-white font-black px-6 py-3 rounded-2xl text-lg shadow-lg active:scale-95 transition">
         再次挑戰魔王 ➔
       </button>
@@ -352,7 +352,7 @@
     <div v-else-if="bossGameState === 'gameover'" class="text-center py-10 space-y-3">
       <div class="text-6xl">👻 💥</div>
       <h2 class="text-2xl sm:text-3xl font-black text-red-500">體力耗盡... 挑戰失敗！</h2>
-      <p class="text-gray-600 text-sm">單字還不夠熟練，先回到前面溫習並利用拼字練習記熟吧！</p>
+      <p class="text-gray-600 text-sm">單字片語還不夠熟練，先回到前面溫習並利用拼字練習記熟吧！</p>
       <button @click="startBossBattle" class="bg-red-500 hover:bg-red-600 text-white font-black px-6 py-3 rounded-2xl text-lg shadow-lg active:scale-95 transition">
         重新挑戰 ➔
       </button>
@@ -375,7 +375,7 @@ createApp({
     const stars = ref(0);
     const currentMode = ref('study');
 
-    // 替換為你的 Google Apps Script 網頁應用程式網址
+    // 務必替換為你的 Google Apps Script 網頁應用程式網址
     const GAS_URL = 'https://script.google.com/macros/s/AKfycbzAmZw5zb9gkAL_S-Xr2ozuu_7stSzUgyOFRRavm0Imfs38cirJXEfKkiTARX9GOIAwyg/exec';
 
     // 試煉關卡狀態
@@ -397,7 +397,7 @@ createApp({
     const bossGameState = ref('playing');
     const bossHp = ref(100);
     const playerHp = ref(100);
-    const timer = ref(45); // 放寬為 45 秒充裕時間
+    const timer = ref(45); // 45 秒充裕時間
     let timerInterval = null;
     const isShaking = ref(false);
     const combatMsg = ref('');
@@ -410,7 +410,7 @@ createApp({
     const hwCanvas = ref(null);
     let hwCtx = null;
     let isDrawing = false;
-    const isWritingActive = ref(false); // 是否處於動筆暫停計時狀態
+    const isWritingActive = ref(false); // 手寫凍結計時狀態
     let currentStroke = [];
     let strokes = [];
     let recognizeTimer = null;
@@ -436,7 +436,7 @@ createApp({
       if (!currentBossQuestion.value) return '';
       const s = currentBossQuestion.value.sentence || '';
       const w = currentBossQuestion.value.word || '';
-      const regex = new RegExp(w, 'gi');
+      const regex = new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
       return s.replace(regex, '______');
     });
 
@@ -544,7 +544,7 @@ createApp({
       }
     };
 
-    // 拼字試煉
+    // 拼字試煉 (支援片語中的空格)
     const initSpellTrial = () => {
       if (wordList.value.length === 0) return;
       trialIndex.value = 0;
@@ -649,14 +649,20 @@ createApp({
       bossTypedWord.value = '';
       lastRecognizedLetter.value = '';
 
+      // 生成首字母與底線提示（片語空格保留顯示）
       bossQuizList.value = shuffle([...wordList.value]).map(w => {
-        const firstLetter = w.word.trim()[0];
-        const underscores = '_ '.repeat(w.word.trim().length - 1);
+        const target = w.word.trim();
+        const hintChars = target.split('').map((char, index) => {
+          if (char === ' ') return '  ';
+          if (index === 0) return char;
+          return '_ ';
+        }).join('');
+
         return {
-          word: w.word.trim(),
+          word: target,
           meaning: w.meaning,
           sentence: w.sentence,
-          hint: `${firstLetter} ${underscores}`
+          hint: hintChars
         };
       });
 
@@ -688,7 +694,7 @@ createApp({
     // 手寫筆劃：落筆時立即凍結計時
     const handlePointerDown = (e) => {
       isDrawing = true;
-      isWritingActive.value = true; // 啟動凍結狀態
+      isWritingActive.value = true;
       clearTimeout(recognizeTimer);
       const canvas = hwCanvas.value;
       const rect = canvas.getBoundingClientRect();
@@ -728,7 +734,7 @@ createApp({
       }, 600);
     };
 
-    // Google 免費手寫識別 API
+    // Google 手寫識別 API（支援空格與縮寫符號）
     const recognizeHandwriting = async () => {
       if (strokes.length === 0) {
         isWritingActive.value = false;
@@ -759,10 +765,11 @@ createApp({
         if (data && data[1] && data[1][0] && data[1][0][1]) {
           const candidate = data[1][0][1][0];
           if (candidate) {
-            const cleanLetter = candidate.replace(/[^a-zA-Z ']/g, '').toLowerCase();
-            if (cleanLetter) {
-              bossTypedWord.value += cleanLetter;
-              lastRecognizedLetter.value = cleanLetter;
+            // 放寬正則：保留英文字母、空格與縮寫符號 '
+            const cleanText = candidate.replace(/[^a-zA-Z ']/g, '').toLowerCase();
+            if (cleanText) {
+              bossTypedWord.value += cleanText;
+              lastRecognizedLetter.value = cleanText;
             }
           }
         }
@@ -770,8 +777,15 @@ createApp({
         console.warn('手寫辨識微延遲', err);
       } finally {
         isRecognizing.value = false;
-        isWritingActive.value = false; // 解除凍結，恢復計時
+        isWritingActive.value = false;
         clearCanvas();
+      }
+    };
+
+    // 新增空白按鈕動作
+    const addSpaceToBossWord = () => {
+      if (bossTypedWord.value.length > 0 && !bossTypedWord.value.endsWith(' ')) {
+        bossTypedWord.value += ' ';
       }
     };
 
@@ -814,8 +828,9 @@ createApp({
 
     const submitBossAnswer = () => {
       if (bossGameState.value !== 'playing') return;
-      const input = bossTypedWord.value.trim().toLowerCase();
-      const target = currentBossQuestion.value.word.toLowerCase();
+      // 去除多餘前後空格進行對比
+      const input = bossTypedWord.value.trim().toLowerCase().replace(/\s+/g, ' ');
+      const target = currentBossQuestion.value.word.trim().toLowerCase().replace(/\s+/g, ' ');
 
       if (input === target) {
         const damage = Math.ceil(100 / bossQuizList.value.length);
@@ -832,12 +847,7 @@ createApp({
         if (playerHp.value <= 0) checkBattleStatus(false);
       }
     };
-    const addSpaceToBossWord = () => {
-      // 避免開頭直接加空白，以及避免連續打多個空白
-      if (bossTypedWord.value.length > 0 && !bossTypedWord.value.endsWith(' ')) {
-        bossTypedWord.value += ' ';
-      }
-    };
+
     const startBossVoiceAttack = () => {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) return;
