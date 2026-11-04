@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>字島大冒險 - 勇者試煉之路</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <style>
+    body {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      touch-action: manipulation;
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-8px); }
+      40%, 80% { transform: translateX(8px); }
+    }
+    .shake-anim {
+      animation: shake 0.4s ease-in-out;
+    }
+    /* 手寫畫布專用防手勢干擾 */
+    .handwriting-canvas {
+      touch-action: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 min-h-screen flex items-center justify-center p-2 sm:p-4 text-slate-800">
+
+<div id="app" class="w-full max-w-2xl bg-white rounded-3xl shadow-2xl p-5 sm:p-8 border-4" :class="borderTheme">
+  
+  <!-- 頂部模式導航列 -->
+  <div class="flex flex-wrap justify-between items-center mb-3 pb-3 border-b border-gray-100 gap-2">
+    <div class="flex flex-wrap gap-1.5 sm:gap-2">
+      <button @click="setMode('study')" 
+              :class="currentMode === 'study' ? 'bg-amber-400 text-amber-950 font-black shadow' : 'bg-gray-100 text-gray-500'"
+              class="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition">
+        📖 單字溫習
+      </button>
+      <button @click="setMode('trial_listen')" 
+              :class="currentMode === 'trial_listen' ? 'bg-blue-500 text-white font-black shadow' : 'bg-gray-100 text-gray-500'"
+              class="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition">
+        👂 聽力試煉
+      </button>
+      <button @click="setMode('trial_spell')" 
+              :class="currentMode === 'trial_spell' ? 'bg-emerald-500 text-white font-black shadow' : 'bg-gray-100 text-gray-500'"
+              class="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition">
+        🧩 拼字試煉
+      </button>
+      <button @click="setMode('boss')" 
+              :class="currentMode === 'boss' ? 'bg-red-500 text-white font-black shadow animate-pulse' : 'bg-gray-100 text-gray-500'"
+              class="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition">
+        ⚔️ 決戰 Boss
+      </button>
+    </div>
+
+    <!-- 勇者星星積分 -->
+    <div class="flex items-center gap-1 bg-amber-100 px-3 py-1 rounded-full text-amber-900 font-black text-sm">
+      <span>⭐ 星幣:</span>
+      <span>{{ stars }}</span>
+    </div>
+  </div>
+
+  <!-- 課次切換下拉選單 -->
+  <div class="flex items-center justify-between mb-4 bg-amber-50/90 p-2.5 rounded-2xl border border-amber-200">
+    <div class="flex items-center gap-2">
+      <span class="text-xs sm:text-sm font-black text-amber-900">📚 選擇課次：</span>
+      <select v-model="selectedUnit" 
+              @change="onUnitChange"
+              class="bg-white border border-amber-300 text-amber-950 font-bold py-1 px-3 rounded-xl shadow-sm text-xs sm:text-sm outline-none focus:ring-2 focus:ring-amber-400">
+        <option value="ALL">全部單字 (共 {{ allRawWords.length }} 字)</option>
+        <option v-for="u in unitList" :key="u" :value="u">
+          {{ u }} ({{ getUnitWordCount(u) }} 字)
+        </option>
+      </select>
+    </div>
+
+    <div v-if="currentMode === 'study' && wordList.length > 0" class="text-xs font-bold text-amber-800">
+      {{ currentIndex + 1 }} / {{ wordList.length }}
+    </div>
+  </div>
+
+  <!-- 資料載入狀態提示 -->
+  <div v-if="allRawWords.length === 0" class="text-center py-16 text-gray-500 space-y-3">
+    <div class="animate-spin text-4xl">⏳</div>
+    <p class="text-base font-bold">正在讀取試算表單字庫...</p>
+  </div>
+
+  <!-- ================= 關卡 1：單字溫習模式 ================= -->
+  <div v-else-if="currentMode === 'study'">
+    <div class="flex justify-end mb-3">
+      <div class="flex gap-1 bg-amber-50 p-1 rounded-xl border border-amber-200 text-xs font-bold">
+        <button @click="setRate(0.75)" :class="currentRate === 0.75 ? 'bg-amber-500 text-white' : 'text-gray-600'" class="px-2 py-1 rounded-lg">🐢 0.75x</button>
+        <button @click="setRate(1.0)" :class="currentRate === 1.0 ? 'bg-amber-500 text-white' : 'text-gray-600'" class="px-2 py-1 rounded-lg">🚶 1.0x</button>
+        <button @click="setRate(1.25)" :class="currentRate === 1.25 ? 'bg-amber-500 text-white' : 'text-gray-600'" class="px-2 py-1 rounded-lg">🐰 1.25x</button>
+      </div>
+    </div>
+
+    <div v-if="currentWord" class="space-y-4 text-center">
+      <div class="bg-amber-50 border border-amber-200 rounded-3xl p-5 shadow-inner">
+        <div class="flex items-center justify-center gap-3">
+          <h1 class="text-4xl sm:text-5xl font-black text-blue-900 tracking-wide">{{ currentWord.word }}</h1>
+          <button @click="speak(currentWord.word)" class="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white p-2.5 rounded-2xl shadow transition">
+            🔊
+          </button>
+        </div>
+        <p class="text-2xl font-bold text-gray-800 mt-2">{{ currentWord.meaning }}</p>
+      </div>
+
+      <div @click="speak(currentWord.sentence)" class="bg-blue-50 hover:bg-blue-100/70 border border-blue-200 rounded-2xl p-4 text-left cursor-pointer transition">
+        <div class="flex justify-between items-start">
+          <p class="text-lg font-medium text-blue-950 pr-6">“ {{ currentWord.sentence }} ”</p>
+          <span class="text-blue-500 text-sm">🔊</span>
+        </div>
+        <p class="text-sm text-gray-500 mt-1">{{ currentWord.sentence_cn }}</p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <button @click="speak(currentWord.word)" class="bg-blue-500 hover:bg-blue-600 active:scale-95 text-white font-bold py-3.5 rounded-xl shadow flex items-center justify-center gap-1">
+          <span>🔊 聽發音</span>
+          <span class="hidden sm:inline text-xs opacity-75">(Space)</span>
+        </button>
+        <button @click="startListeningStudy" :class="isListening ? 'bg-red-500 animate-pulse' : 'bg-green-500 hover:bg-green-600 active:scale-95'" class="text-white font-bold py-3.5 rounded-xl shadow flex items-center justify-center gap-1">
+          <span>🎤 {{ isListening ? '傾聽中...' : '開口挑戰' }}</span>
+          <span class="hidden sm:inline text-xs opacity-75">(R)</span>
+        </button>
+      </div>
+
+      <div v-if="studyFeedback" class="text-lg font-black" :class="studyFeedbackColor">{{ studyFeedback }}</div>
+
+      <button @click="nextWord" class="w-full bg-amber-400 hover:bg-amber-500 active:scale-98 py-3.5 rounded-xl font-black text-lg text-amber-950 shadow">
+        下一題 ➔
+      </button>
+    </div>
+  </div>
+
+  <!-- ================= 關卡 2：聽力試煉 ================= -->
+  <div v-else-if="currentMode === 'trial_listen'">
+    <div class="text-center mb-4">
+      <span class="bg-blue-100 text-blue-800 text-xs font-black px-3 py-1 rounded-full">關卡：聽力盲測</span>
+      <h2 class="text-xl sm:text-2xl font-black text-slate-800 mt-1">選出發音對應的中文意思！</h2>
+      <p class="text-xs text-gray-400 mt-0.5">進度：{{ trialIndex + 1 }} / {{ trialList.length }}</p>
+    </div>
+
+    <div v-if="currentTrialWord" class="space-y-4 text-center">
+      <div class="bg-blue-50 border-2 border-dashed border-blue-300 rounded-2xl p-6 flex flex-col items-center justify-center">
+        <button @click="speak(currentTrialWord.word)" class="bg-blue-600 hover:bg-blue-700 active:scale-90 text-white w-16 h-16 rounded-full flex items-center justify-center text-2xl shadow-xl transition">
+          🔊
+        </button>
+        <span class="text-xs font-bold text-blue-600 mt-2">點擊播放發音</span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <button v-for="(opt, idx) in currentTrialWord.options" :key="idx"
+                @click="checkListenAnswer(opt)"
+                class="bg-white hover:bg-blue-50 border-2 border-slate-200 hover:border-blue-400 active:scale-95 p-3.5 rounded-2xl text-base sm:text-lg font-bold text-slate-700 shadow-sm transition">
+          {{ opt }}
+        </button>
+      </div>
+
+      <div v-if="trialFeedback" class="text-lg font-black" :class="trialFeedbackColor">{{ trialFeedback }}</div>
+    </div>
+  </div>
+
+  <!-- ================= 關卡 3：拼字試煉 ================= -->
+  <div v-else-if="currentMode === 'trial_spell'">
+    <div class="text-center mb-4">
+      <span class="bg-emerald-100 text-emerald-800 text-xs font-black px-3 py-1 rounded-full">關卡：拼字積木</span>
+      <h2 class="text-xl sm:text-2xl font-black text-slate-800 mt-1">拼出正確英文單字！</h2>
+      <p class="text-xs text-gray-400 mt-0.5">進度：{{ trialIndex + 1 }} / {{ trialList.length }}</p>
+    </div>
+
+    <div v-if="currentTrialWord" class="space-y-4 text-center">
+      <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex justify-between items-center px-5">
+        <span class="text-xl sm:text-2xl font-black text-emerald-950">{{ currentTrialWord.meaning }}</span>
+        <button @click="speak(currentTrialWord.word)" class="bg-emerald-600 text-white p-2 rounded-xl text-xs font-bold shadow">
+          🔊 發音提示
+        </button>
+      </div>
+
+      <div class="flex flex-wrap justify-center gap-1.5 min-h-[46px] p-2 bg-slate-100 rounded-2xl border-2 border-slate-300">
+        <span v-for="(letter, i) in spelledLetters" :key="i"
+              @click="removeLetter(i)"
+              class="w-10 h-10 bg-white text-emerald-700 border-2 border-emerald-400 rounded-xl font-black text-lg flex items-center justify-center cursor-pointer shadow-sm active:scale-95">
+          {{ letter }}
+        </span>
+      </div>
+
+      <div class="flex flex-wrap justify-center gap-1.5 pt-1">
+        <button v-for="(item, idx) in scrambledPool" :key="idx"
+                :disabled="item.used"
+                @click="pickLetter(item)"
+                :class="item.used ? 'opacity-20 cursor-not-allowed bg-gray-200' : 'bg-emerald-500 text-white hover:bg-emerald-600 active:scale-90 shadow-md'"
+                class="w-10 h-10 rounded-xl font-black text-lg flex items-center justify-center transition">
+          {{ item.letter }}
+        </button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-1">
+        <button @click="resetSpelling" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2.5 rounded-xl text-sm">
+          🔄 重新拼湊
+        </button>
+        <button @click="checkSpelling" class="bg-emerald-500 hover:bg-emerald-600 text-white font-black py-2.5 rounded-xl shadow text-sm">
+          ✨ 檢查拼字
+        </button>
+      </div>
+
+      <div v-if="trialFeedback" class="text-lg font-black" :class="trialFeedbackColor">{{ trialFeedback }}</div>
+    </div>
+  </div>
+
+  <!-- ================= 關卡 4：決戰 Boss 模式 (手寫板 + 45秒暫停機制) ================= -->
+  <div v-else-if="currentMode === 'boss'">
+    <!-- 戰鬥雙方血量條 -->
+    <div class="space-y-2 mb-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+      <div>
+        <div class="flex justify-between items-center text-xs sm:text-sm font-black mb-0.5 text-purple-900">
+          <span>👾 單字暗黑巨龍 (Boss)</span>
+          <span>{{ bossHp }} / 100 HP</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+          <div class="bg-purple-600 h-3 rounded-full transition-all duration-500" :style="{ width: bossHp + '%' }"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="flex justify-between items-center text-xs sm:text-sm font-black mb-0.5 text-green-900">
+          <span>🧙‍♂️ 小小冒險家 (你)</span>
+          <span>{{ playerHp }} / 100 HP</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+          <div class="bg-green-500 h-3 rounded-full transition-all duration-300" :style="{ width: playerHp + '%' }"></div>
+        </div>
+      </div>
+
+      <!-- 45 秒倒數計時條（手寫時凍結提示） -->
+      <div v-if="bossGameState === 'playing'">
+        <div class="flex justify-between text-[11px] font-bold text-gray-500 mb-0.5">
+          <span class="flex items-center gap-1">
+            <span>倒數計時</span>
+            <span v-if="isWritingActive" class="text-purple-600 font-black animate-pulse">（動筆中，計時暫停⏸️）</span>
+          </span>
+          <span class="font-mono font-bold">{{ timer }} 秒</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+          <div class="h-2 rounded-full transition-all duration-1000 linear" 
+               :class="timer <= 10 ? 'bg-red-500 animate-pulse' : 'bg-amber-400'"
+               :style="{ width: (timer / 45) * 100 + '%' }"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 戰鬥進行中 -->
+    <div v-if="bossGameState === 'playing' && currentBossQuestion" class="space-y-3" :class="{ 'shake-anim': isShaking }">
+      <div class="bg-purple-50 border-2 border-purple-200 rounded-2xl p-3.5 text-center shadow-inner relative">
+        <div class="text-[11px] font-black text-purple-400">第 {{ bossQuestionIndex + 1 }} 題 / 共 {{ bossQuizList.length }} 題</div>
+        
+        <h2 class="text-2xl sm:text-3xl font-black text-purple-950 mt-1">
+          {{ currentBossQuestion.meaning }}
+        </h2>
+
+        <div class="inline-block bg-purple-200/80 text-purple-900 px-3 py-0.5 rounded-full text-xs font-bold tracking-widest mt-1">
+          提示：{{ currentBossQuestion.hint }} (共 {{ currentBossQuestion.word.length }} 字)
+        </div>
+
+        <p class="text-xs text-gray-500 italic mt-1 bg-white/70 p-1.5 rounded-lg border border-purple-100">
+          “ {{ maskedSentence }} ”
+        </p>
+      </div>
+
+      <!-- 目前已辨識的拼字呈現區 (不彈出鍵盤) -->
+      <div class="bg-white border-2 border-purple-300 rounded-2xl p-2.5 flex items-center justify-between shadow-sm">
+        <div class="flex items-center gap-1 pl-2">
+          <span class="text-xs font-bold text-gray-400">拼字：</span>
+          <span class="text-2xl font-black text-purple-900 tracking-wider font-mono">
+            {{ bossTypedWord || '_____' }}
+          </span>
+          <span v-if="isRecognizing" class="text-xs text-purple-500 animate-pulse font-bold">（辨識中...）</span>
+        </div>
+
+        <div class="flex gap-1.5">
+          <button @click="backspaceBossWord" 
+                  class="bg-amber-100 hover:bg-amber-200 active:scale-95 text-amber-900 font-bold px-3 py-1.5 rounded-xl text-xs transition">
+            ⌫ 倒退
+          </button>
+          <button @click="clearBossWord" 
+                  class="bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-600 font-bold px-3 py-1.5 rounded-xl text-xs transition">
+            清空
+          </button>
+        </div>
+      </div>
+
+      <!-- 手寫板畫布區域 (Apple Pencil / 手指專用) -->
+      <div class="bg-purple-100/50 border-2 border-dashed border-purple-300 rounded-2xl p-2 flex flex-col items-center relative">
+        <div class="flex justify-between w-full px-2 text-[11px] font-bold text-purple-700 mb-1">
+          <span>✍️ 在此手寫字母（寫完停筆自動辨識）：</span>
+          <span v-if="lastRecognizedLetter" class="text-purple-900 font-black">剛填入: {{ lastRecognizedLetter }}</span>
+        </div>
+        
+        <canvas ref="hwCanvas" 
+                @pointerdown="handlePointerDown"
+                @pointermove="handlePointerMove"
+                @pointerup="handlePointerUp"
+                @pointercancel="handlePointerUp"
+                class="handwriting-canvas bg-white rounded-xl shadow-inner w-full border border-purple-200 cursor-crosshair"
+                height="130"></canvas>
+      </div>
+
+      <!-- 攻擊操作按鈕 -->
+      <div class="grid grid-cols-2 gap-2">
+        <button @click="submitBossAnswer" 
+                class="bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-black py-3 rounded-2xl text-base shadow-md transition flex items-center justify-center gap-1">
+          <span>發動攻擊 ⚔️</span>
+        </button>
+
+        <button @click="startBossVoiceAttack" 
+                :class="isListening ? 'bg-red-500 animate-pulse' : 'bg-emerald-500 hover:bg-emerald-600 active:scale-95'"
+                class="text-white font-black py-3 rounded-2xl text-sm sm:text-base shadow-md transition flex items-center justify-center gap-1">
+          <span>🎤 {{ isListening ? '傾聽中...' : '開口唸單字' }}</span>
+        </button>
+      </div>
+
+      <div v-if="combatMsg" class="text-center text-sm sm:text-base font-black transition" :class="combatMsgColor">
+        {{ combatMsg }}
+      </div>
+    </div>
+
+    <!-- 勝利畫面 -->
+    <div v-else-if="bossGameState === 'victory'" class="text-center py-10 space-y-3">
+      <div class="text-6xl animate-bounce">👑 🏆 ⚔️</div>
+      <h2 class="text-2xl sm:text-3xl font-black text-amber-500">大勝利！巨龍被你擊敗了！</h2>
+      <p class="text-gray-600 text-sm">你成功看著中文完整手寫背出所有單字，獲得 10 顆星幣！</p>
+      <button @click="startBossBattle" class="bg-green-500 hover:bg-green-600 text-white font-black px-6 py-3 rounded-2xl text-lg shadow-lg active:scale-95 transition">
+        再次挑戰魔王 ➔
+      </button>
+    </div>
+
+    <!-- 失敗畫面 -->
+    <div v-else-if="bossGameState === 'gameover'" class="text-center py-10 space-y-3">
+      <div class="text-6xl">👻 💥</div>
+      <h2 class="text-2xl sm:text-3xl font-black text-red-500">體力耗盡... 挑戰失敗！</h2>
+      <p class="text-gray-600 text-sm">單字還不夠熟練，先回到前面溫習並利用拼字練習記熟吧！</p>
+      <button @click="startBossBattle" class="bg-red-500 hover:bg-red-600 text-white font-black px-6 py-3 rounded-2xl text-lg shadow-lg active:scale-95 transition">
+        重新挑戰 ➔
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const { createApp, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
+
+createApp({
+  setup() {
+    const allRawWords = ref([]);
+    const wordList = ref([]);
+    const selectedUnit = ref('ALL');
+
+    const currentIndex = ref(0);
+    const currentRate = ref(1.0);
+    const stars = ref(0);
+    const currentMode = ref('study');
+
+    // 替換為你的 Google Apps Script 網頁應用程式網址
+    const GAS_URL = '貼上你的_APPS_SCRIPT_網頁應用程式網址';
+
+    // 試煉關卡狀態
+    const trialList = ref([]);
+    const trialIndex = ref(0);
+    const trialFeedback = ref('');
+    const trialFeedbackColor = ref('text-green-600');
+
+    // 拼字狀態
+    const scrambledPool = ref([]);
+    const spelledLetters = ref([]);
+
+    // 溫習語音狀態
+    const isListening = ref(false);
+    const studyFeedback = ref('');
+    const studyFeedbackColor = ref('text-green-600');
+
+    // Boss 戰狀態
+    const bossGameState = ref('playing');
+    const bossHp = ref(100);
+    const playerHp = ref(100);
+    const timer = ref(45); // 放寬為 45 秒充裕時間
+    let timerInterval = null;
+    const isShaking = ref(false);
+    const combatMsg = ref('');
+    const combatMsgColor = ref('text-green-600');
+    const bossQuizList = ref([]);
+    const bossQuestionIndex = ref(0);
+    const bossTypedWord = ref('');
+
+    // 手寫畫布相關狀態
+    const hwCanvas = ref(null);
+    let hwCtx = null;
+    let isDrawing = false;
+    const isWritingActive = ref(false); // 是否處於動筆暫停計時狀態
+    let currentStroke = [];
+    let strokes = [];
+    let recognizeTimer = null;
+    const isRecognizing = ref(false);
+    const lastRecognizedLetter = ref('');
+
+    const currentWord = computed(() => wordList.value[currentIndex.value]);
+    const currentTrialWord = computed(() => trialList.value[trialIndex.value]);
+    const currentBossQuestion = computed(() => bossQuizList.value[bossQuestionIndex.value]);
+
+    const unitList = computed(() => {
+      const units = allRawWords.value
+        .map(w => w.unit ? String(w.unit).trim() : '未分類')
+        .filter(u => u !== '');
+      return Array.from(new Set(units));
+    });
+
+    const getUnitWordCount = (u) => {
+      return allRawWords.value.filter(w => (w.unit ? String(w.unit).trim() : '未分類') === u).length;
+    };
+
+    const maskedSentence = computed(() => {
+      if (!currentBossQuestion.value) return '';
+      const s = currentBossQuestion.value.sentence || '';
+      const w = currentBossQuestion.value.word || '';
+      const regex = new RegExp(w, 'gi');
+      return s.replace(regex, '______');
+    });
+
+    const borderTheme = computed(() => {
+      switch (currentMode.value) {
+        case 'trial_listen': return 'border-blue-400';
+        case 'trial_spell': return 'border-emerald-400';
+        case 'boss': return 'border-red-500';
+        default: return 'border-amber-300';
+      }
+    });
+
+    const fetchWords = async () => {
+      try {
+        const res = await fetch(GAS_URL);
+        const data = await res.json();
+        allRawWords.value = data.filter(item => item.word && String(item.word).trim() !== '');
+        onUnitChange();
+      } catch (e) {
+        alert('無法載入單字，請檢查網路連線或 Apps Script 部署網址！');
+      }
+    };
+
+    const onUnitChange = () => {
+      if (selectedUnit.value === 'ALL') {
+        wordList.value = [...allRawWords.value];
+      } else {
+        wordList.value = allRawWords.value.filter(w => 
+          (w.unit ? String(w.unit).trim() : '未分類') === selectedUnit.value
+        );
+      }
+      currentIndex.value = 0;
+      if (currentMode.value === 'trial_listen') initListenTrial();
+      else if (currentMode.value === 'trial_spell') initSpellTrial();
+      else if (currentMode.value === 'boss') startBossBattle();
+    };
+
+    const shuffle = (arr) => arr.sort(() => Math.random() - 0.5);
+
+    const speak = (text) => {
+      if (!text) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      utterance.rate = currentRate.value;
+      const voices = window.speechSynthesis.getVoices();
+      const preferred = voices.find(v => 
+        v.lang.startsWith('en') && 
+        (v.name.includes('Samantha') || v.name.includes('Siri') || v.name.includes('Natural'))
+      ) || voices.find(v => v.lang === 'en-US');
+      if (preferred) utterance.voice = preferred;
+      window.speechSynthesis.speak(utterance);
+    };
+
+    const setRate = (r) => {
+      currentRate.value = r;
+      if (currentWord.value) speak(currentWord.value.word);
+    };
+
+    const setMode = (mode) => {
+      currentMode.value = mode;
+      clearInterval(timerInterval);
+      trialFeedback.value = '';
+
+      if (mode === 'trial_listen') initListenTrial();
+      else if (mode === 'trial_spell') initSpellTrial();
+      else if (mode === 'boss') startBossBattle();
+    };
+
+    // 聽力試煉
+    const initListenTrial = () => {
+      if (wordList.value.length === 0) return;
+      trialIndex.value = 0;
+      trialList.value = shuffle([...wordList.value]).map(w => {
+        const distractors = wordList.value.filter(o => o.word !== w.word).map(o => o.meaning);
+        return {
+          word: w.word,
+          correctMeaning: w.meaning,
+          options: shuffle([w.meaning, ...shuffle(distractors).slice(0, 3)])
+        };
+      });
+      setTimeout(() => { if (currentTrialWord.value) speak(currentTrialWord.value.word); }, 300);
+    };
+
+    const checkListenAnswer = (selected) => {
+      if (selected === currentTrialWord.value.correctMeaning) {
+        trialFeedback.value = '🎉 聽得真準！太棒了！ (+1 ⭐)';
+        trialFeedbackColor.value = 'text-green-600';
+        stars.value++;
+        speak('Great job!');
+        setTimeout(() => {
+          trialFeedback.value = '';
+          if (trialIndex.value < trialList.value.length - 1) {
+            trialIndex.value++;
+            speak(currentTrialWord.value.word);
+          } else {
+            trialFeedback.value = '🏆 恭喜通過本單元聽力試煉！';
+            if (window.confetti) confetti();
+          }
+        }, 1200);
+      } else {
+        trialFeedback.value = '再仔細聽一次發音看看～';
+        trialFeedbackColor.value = 'text-orange-500';
+        speak(currentTrialWord.value.word);
+      }
+    };
+
+    // 拼字試煉
+    const initSpellTrial = () => {
+      if (wordList.value.length === 0) return;
+      trialIndex.value = 0;
+      trialList.value = shuffle([...wordList.value]);
+      setupSpellingLetters();
+    };
+
+    const setupSpellingLetters = () => {
+      if (!currentTrialWord.value) return;
+      const target = currentTrialWord.value.word.trim();
+      spelledLetters.value = [];
+      const letters = target.split('');
+      scrambledPool.value = shuffle(letters).map((l, i) => ({ id: i, letter: l, used: false }));
+      speak(target);
+    };
+
+    const pickLetter = (item) => {
+      item.used = true;
+      spelledLetters.value.push(item.letter);
+    };
+
+    const removeLetter = (idx) => {
+      const removed = spelledLetters.value.splice(idx, 1)[0];
+      const found = scrambledPool.value.find(p => p.letter === removed && p.used);
+      if (found) found.used = false;
+    };
+
+    const resetSpelling = () => {
+      spelledLetters.value = [];
+      scrambledPool.value.forEach(p => p.used = false);
+    };
+
+    const checkSpelling = () => {
+      const spelled = spelledLetters.value.join('');
+      const target = currentTrialWord.value.word.trim();
+
+      if (spelled.toLowerCase() === target.toLowerCase()) {
+        trialFeedback.value = '🎯 拼字完全正確！ (+2 ⭐)';
+        trialFeedbackColor.value = 'text-green-600';
+        stars.value += 2;
+        speak('Awesome!');
+        setTimeout(() => {
+          trialFeedback.value = '';
+          if (trialIndex.value < trialList.value.length - 1) {
+            trialIndex.value++;
+            setupSpellingLetters();
+          } else {
+            trialFeedback.value = '🏆 恭喜通過拼字試煉！';
+            if (window.confetti) confetti();
+          }
+        }, 1200);
+      } else {
+        trialFeedback.value = '拼法不太對，再試一次看看～';
+        trialFeedbackColor.value = 'text-orange-500';
+      }
+    };
+
+    // 溫習語音辨識
+    const startListeningStudy = () => {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) return alert('此瀏覽器不支援語音辨識');
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      isListening.value = true;
+      studyFeedback.value = '';
+
+      recognition.onresult = (event) => {
+        const spoken = event.results[0][0].transcript.trim().toLowerCase().replace(/[^a-z0-9 ]/g, '');
+        const target = currentWord.value.word.trim().toLowerCase().replace(/[^a-z0-9 ]/g, '');
+
+        if (spoken === target || spoken.includes(target)) {
+          studyFeedback.value = '🌟 太棒了！發音非常標準！';
+          studyFeedbackColor.value = 'text-green-600';
+          speak('Awesome!');
+        } else {
+          studyFeedback.value = `聽到的是 "${spoken}"，再試一次！`;
+          studyFeedbackColor.value = 'text-orange-500';
+        }
+      };
+      recognition.onend = () => { isListening.value = false; };
+      recognition.start();
+    };
+
+    const nextWord = () => {
+      studyFeedback.value = '';
+      if (currentIndex.value < wordList.value.length - 1) {
+        currentIndex.value++;
+      } else {
+        currentIndex.value = 0;
+      }
+    };
+
+    // ================= Boss 戰手寫辨識與凍結計時核心 =================
+    const startBossBattle = () => {
+      if (wordList.value.length === 0) return;
+      bossHp.value = 100;
+      playerHp.value = 100;
+      bossQuestionIndex.value = 0;
+      bossGameState.value = 'playing';
+      combatMsg.value = '';
+      bossTypedWord.value = '';
+      lastRecognizedLetter.value = '';
+
+      bossQuizList.value = shuffle([...wordList.value]).map(w => {
+        const firstLetter = w.word.trim()[0];
+        const underscores = '_ '.repeat(w.word.trim().length - 1);
+        return {
+          word: w.word.trim(),
+          meaning: w.meaning,
+          sentence: w.sentence,
+          hint: `${firstLetter} ${underscores}`
+        };
+      });
+
+      startBossTimer();
+      nextTick(() => { initCanvas(); });
+    };
+
+    const initCanvas = () => {
+      if (!hwCanvas.value) return;
+      const canvas = hwCanvas.value;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = 130;
+
+      hwCtx = canvas.getContext('2d');
+      hwCtx.lineWidth = 4;
+      hwCtx.lineCap = 'round';
+      hwCtx.lineJoin = 'round';
+      hwCtx.strokeStyle = '#4338ca';
+      clearCanvas();
+    };
+
+    const clearCanvas = () => {
+      if (!hwCtx || !hwCanvas.value) return;
+      hwCtx.clearRect(0, 0, hwCanvas.value.width, hwCanvas.value.height);
+      strokes = [];
+    };
+
+    // 手寫筆劃：落筆時立即凍結計時
+    const handlePointerDown = (e) => {
+      isDrawing = true;
+      isWritingActive.value = true; // 啟動凍結狀態
+      clearTimeout(recognizeTimer);
+      const canvas = hwCanvas.value;
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.round(e.clientX - rect.left);
+      const y = Math.round(e.clientY - rect.top);
+
+      currentStroke = [[x], [y]];
+      hwCtx.beginPath();
+      hwCtx.moveTo(x, y);
+    };
+
+    const handlePointerMove = (e) => {
+      if (!isDrawing) return;
+      const canvas = hwCanvas.value;
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.round(e.clientX - rect.left);
+      const y = Math.round(e.clientY - rect.top);
+
+      currentStroke[0].push(x);
+      currentStroke[1].push(y);
+
+      hwCtx.lineTo(x, y);
+      hwCtx.stroke();
+    };
+
+    const handlePointerUp = () => {
+      if (!isDrawing) return;
+      isDrawing = false;
+      if (currentStroke.length && currentStroke[0].length) {
+        strokes.push(currentStroke);
+      }
+
+      // 停筆 600 毫秒後辨識，辨識完成才恢復計時
+      clearTimeout(recognizeTimer);
+      recognizeTimer = setTimeout(() => {
+        recognizeHandwriting();
+      }, 600);
+    };
+
+    // Google 免費手寫識別 API
+    const recognizeHandwriting = async () => {
+      if (strokes.length === 0) {
+        isWritingActive.value = false;
+        return;
+      }
+      isRecognizing.value = true;
+
+      const payload = {
+        options: 'enable_pre_space',
+        requests: [{
+          writing_guide: {
+            writing_area_width: hwCanvas.value.width,
+            writing_area_height: hwCanvas.value.height
+          },
+          ink: strokes,
+          language: 'en'
+        }]
+      };
+
+      try {
+        const res = await fetch('https://www.google.com.tw/inputtools/request?ime=handwriting&app=mobilesearch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (data && data[1] && data[1][0] && data[1][0][1]) {
+          const candidate = data[1][0][1][0];
+          if (candidate) {
+            const cleanLetter = candidate.replace(/[^a-zA-Z]/g, '').toLowerCase();
+            if (cleanLetter) {
+              bossTypedWord.value += cleanLetter;
+              lastRecognizedLetter.value = cleanLetter;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('手寫辨識微延遲', err);
+      } finally {
+        isRecognizing.value = false;
+        isWritingActive.value = false; // 解除凍結，恢復計時
+        clearCanvas();
+      }
+    };
+
+    const backspaceBossWord = () => {
+      bossTypedWord.value = bossTypedWord.value.slice(0, -1);
+    };
+
+    const clearBossWord = () => {
+      bossTypedWord.value = '';
+      clearCanvas();
+    };
+
+    const startBossTimer = () => {
+      clearInterval(timerInterval);
+      timer.value = 45; // 45 秒倒數
+      timerInterval = setInterval(() => {
+        // 只有在「沒有在手寫且不在辨識中」才進行扣秒
+        if (!isDrawing && !isWritingActive.value && !isRecognizing.value) {
+          timer.value--;
+          if (timer.value <= 0) {
+            handleBossTimeout();
+          }
+        }
+      }, 1000);
+    };
+
+    const triggerShake = () => {
+      isShaking.value = true;
+      setTimeout(() => { isShaking.value = false; }, 400);
+    };
+
+    const handleBossTimeout = () => {
+      triggerShake();
+      playerHp.value = Math.max(0, playerHp.value - 20);
+      combatMsg.value = `⏰ 時間到！正確單字是 "${currentBossQuestion.value.word}"，受到反擊 -20 HP！`;
+      combatMsgColor.value = 'text-red-500';
+      speak(currentBossQuestion.value.word);
+      checkBattleStatus(false);
+    };
+
+    const submitBossAnswer = () => {
+      if (bossGameState.value !== 'playing') return;
+      const input = bossTypedWord.value.trim().toLowerCase();
+      const target = currentBossQuestion.value.word.toLowerCase();
+
+      if (input === target) {
+        const damage = Math.ceil(100 / bossQuizList.value.length);
+        bossHp.value = Math.max(0, bossHp.value - damage);
+        combatMsg.value = `🎯 完美背對單字！對 Boss 造成 ${damage} 點重傷！`;
+        combatMsgColor.value = 'text-green-600';
+        speak('Great!');
+        checkBattleStatus(true);
+      } else {
+        triggerShake();
+        playerHp.value = Math.max(0, playerHp.value - 15);
+        combatMsg.value = `💥 拼寫錯誤（"${input}"）！受到 Boss 衝擊 -15 HP！再試一次！`;
+        combatMsgColor.value = 'text-red-500';
+        if (playerHp.value <= 0) checkBattleStatus(false);
+      }
+    };
+
+    const startBossVoiceAttack = () => {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) return;
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      isListening.value = true;
+
+      recognition.onresult = (event) => {
+        const spoken = event.results[0][0].transcript.trim().toLowerCase().replace(/[^a-z0-9 ]/g, '');
+        const target = currentBossQuestion.value.word.toLowerCase().replace(/[^a-z0-9 ]/g, '');
+
+        if (spoken === target || spoken.includes(target)) {
+          const damage = Math.ceil(100 / bossQuizList.value.length);
+          bossHp.value = Math.max(0, bossHp.value - damage);
+          combatMsg.value = `🎤 口說背誦成功！發動音波重擊 ${damage} 點！`;
+          combatMsgColor.value = 'text-purple-600';
+          speak('Awesome!');
+          checkBattleStatus(true);
+        } else {
+          combatMsg.value = `聽到的是 "${spoken}"，不太對喔！`;
+          combatMsgColor.value = 'text-orange-500';
+        }
+      };
+      recognition.onend = () => { isListening.value = false; };
+      recognition.start();
+    };
+
+    const checkBattleStatus = (isCorrect) => {
+      if (bossHp.value <= 0) {
+        clearInterval(timerInterval);
+        bossGameState.value = 'victory';
+        stars.value += 10;
+        if (window.confetti) {
+          confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+        }
+        speak('Victory! You are a master!');
+        return;
+      }
+
+      if (playerHp.value <= 0) {
+        clearInterval(timerInterval);
+        bossGameState.value = 'gameover';
+        speak('Game over! Try again!');
+        return;
+      }
+
+      if (isCorrect) {
+        setTimeout(() => {
+          bossTypedWord.value = '';
+          combatMsg.value = '';
+          clearCanvas();
+          if (bossQuestionIndex.value < bossQuizList.value.length - 1) {
+            bossQuestionIndex.value++;
+            startBossTimer();
+          } else {
+            clearInterval(timerInterval);
+            if (bossHp.value <= 25) {
+              bossGameState.value = 'victory';
+              stars.value += 10;
+              if (window.confetti) confetti();
+            } else {
+              bossGameState.value = 'gameover';
+            }
+          }
+        }, 1000);
+      }
+    };
+
+    onMounted(() => {
+      fetchWords();
+      window.addEventListener('resize', () => {
+        if (currentMode.value === 'boss') initCanvas();
+      });
+    });
+
+    onUnmounted(() => {
+      clearInterval(timerInterval);
+    });
+
+    return {
+      allRawWords,
+      wordList,
+      selectedUnit,
+      unitList,
+      getUnitWordCount,
+      onUnitChange,
+      currentIndex,
+      currentRate,
+      stars,
+      currentMode,
+      borderTheme,
+      trialList,
+      trialIndex,
+      trialFeedback,
+      trialFeedbackColor,
+      scrambledPool,
+      spelledLetters,
+      isListening,
+      studyFeedback,
+      studyFeedbackColor,
+      bossGameState,
+      bossHp,
+      playerHp,
+      timer,
+      isShaking,
+      combatMsg,
+      combatMsgColor,
+      bossQuizList,
+      bossQuestionIndex,
+      bossTypedWord,
+      currentWord,
+      currentTrialWord,
+      currentBossQuestion,
+      maskedSentence,
+      hwCanvas,
+      isRecognizing,
+      isWritingActive,
+      lastRecognizedLetter,
+      handlePointerDown,
+      handlePointerMove,
+      handlePointerUp,
+      backspaceBossWord,
+      clearBossWord,
+      setRate,
+      speak,
+      setMode,
+      nextWord,
+      checkListenAnswer,
+      pickLetter,
+      removeLetter,
+      resetSpelling,
+      checkSpelling,
+      startListeningStudy,
+      startBossBattle,
+      submitBossAnswer,
+      startBossVoiceAttack
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
