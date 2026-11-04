@@ -93,9 +93,10 @@
 
   <!-- ================= 關卡 1：單字溫習模式 ================= -->
   <div v-else-if="currentMode === 'study'">
+    <!-- 語速選擇：改為 0.5x、1.0x、1.25x -->
     <div class="flex justify-end mb-3">
       <div class="flex gap-1 bg-amber-50 p-1 rounded-xl border border-amber-200 text-xs font-bold">
-        <button @click="setRate(0.75)" :class="currentRate === 0.75 ? 'bg-amber-500 text-white' : 'text-gray-600'" class="px-2 py-1 rounded-lg">🐢 0.75x</button>
+        <button @click="setRate(0.5)" :class="currentRate === 0.5 ? 'bg-amber-500 text-white' : 'text-gray-600'" class="px-2 py-1 rounded-lg">🐢 0.5x</button>
         <button @click="setRate(1.0)" :class="currentRate === 1.0 ? 'bg-amber-500 text-white' : 'text-gray-600'" class="px-2 py-1 rounded-lg">🚶 1.0x</button>
         <button @click="setRate(1.25)" :class="currentRate === 1.25 ? 'bg-amber-500 text-white' : 'text-gray-600'" class="px-2 py-1 rounded-lg">🐰 1.25x</button>
       </div>
@@ -214,7 +215,7 @@
     </div>
   </div>
 
-  <!-- ================= 關卡 4：決戰 Boss 模式 (手寫板 + 空白鍵支援) ================= -->
+  <!-- ================= 關卡 4：決戰 Boss 模式 (手寫板 + 空白鍵反饋標籤) ================= -->
   <div v-else-if="currentMode === 'boss'">
     <!-- 戰鬥雙方血量條 -->
     <div class="space-y-2 mb-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
@@ -238,7 +239,7 @@
         </div>
       </div>
 
-      <!-- 45 秒倒數計時條（動筆時顯示凍結狀態） -->
+      <!-- 45 秒倒數計時條（動筆手寫時顯示暫停提示） -->
       <div v-if="bossGameState === 'playing'">
         <div class="flex justify-between text-[11px] font-bold text-gray-500 mb-0.5">
           <span class="flex items-center gap-1">
@@ -273,31 +274,44 @@
         </p>
       </div>
 
-      <!-- 目前已辨識的拼字呈現區 (含空白、倒退、清空按鈕) -->
+      <!-- 目前已辨識的拼字呈現區 (含視覺化空白底線標籤反饋) -->
       <div class="bg-white border-2 border-purple-300 rounded-2xl p-2.5 flex items-center justify-between shadow-sm">
-        <div class="flex items-center gap-1 pl-2 overflow-x-auto">
+        <div class="flex items-center gap-1.5 pl-2 overflow-x-auto min-h-[38px]">
           <span class="text-xs font-bold text-gray-400 shrink-0">拼字：</span>
-          <span class="text-xl sm:text-2xl font-black text-purple-900 tracking-wider font-mono whitespace-nowrap">
-            {{ bossTypedWord || '_____' }}
+          
+          <!-- 未輸入時預設底線 -->
+          <span v-if="bossTypedWord.length === 0" class="text-xl font-black text-gray-300 tracking-wider font-mono">
+            _____
           </span>
-          <span v-if="isRecognizing" class="text-xs text-purple-500 animate-pulse font-bold shrink-0">（辨識中...）</span>
+
+          <!-- 逐字元動態顯示：遇到空格顯示具備底線的專屬 ␣ 空格 徽章 -->
+          <div v-else class="flex items-center gap-1">
+            <span v-for="(char, idx) in bossTypedWord" :key="idx"
+                  :class="char === ' ' 
+                    ? 'bg-purple-100 text-purple-700 border-b-4 border-purple-500 px-2 py-0.5 rounded text-xs font-black shadow-inner' 
+                    : 'text-2xl font-black text-purple-900 font-mono'">
+              {{ char === ' ' ? '␣ 空格' : char }}
+            </span>
+          </div>
+
+          <span v-if="isRecognizing" class="text-xs text-purple-500 animate-pulse font-bold shrink-0 ml-1">（辨識中...）</span>
         </div>
 
         <div class="flex gap-1.5 shrink-0 ml-2">
-          <!-- 支援片語的專用空白鍵 -->
+          <!-- 專用空白鍵 -->
           <button @click="addSpaceToBossWord" 
                   type="button"
-                  class="bg-purple-100 hover:bg-purple-200 active:scale-95 text-purple-900 font-bold px-3 py-1.5 rounded-xl text-xs transition">
+                  class="bg-purple-100 hover:bg-purple-200 active:scale-90 text-purple-900 font-bold px-3 py-1.5 rounded-xl text-xs transition border border-purple-300 shadow-sm">
             ␣ 空白
           </button>
           <button @click="backspaceBossWord" 
                   type="button"
-                  class="bg-amber-100 hover:bg-amber-200 active:scale-95 text-amber-900 font-bold px-3 py-1.5 rounded-xl text-xs transition">
+                  class="bg-amber-100 hover:bg-amber-200 active:scale-90 text-amber-900 font-bold px-3 py-1.5 rounded-xl text-xs transition">
             ⌫ 倒退
           </button>
           <button @click="clearBossWord" 
                   type="button"
-                  class="bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-600 font-bold px-3 py-1.5 rounded-xl text-xs transition">
+                  class="bg-gray-100 hover:bg-gray-200 active:scale-90 text-gray-600 font-bold px-3 py-1.5 rounded-xl text-xs transition">
             清空
           </button>
         </div>
@@ -371,6 +385,7 @@ createApp({
     const selectedUnit = ref('ALL');
 
     const currentIndex = ref(0);
+    // 預設語速 1.0x（可選 0.5x, 1.0x, 1.25x）
     const currentRate = ref(1.0);
     const stars = ref(0);
     const currentMode = ref('study');
@@ -397,7 +412,7 @@ createApp({
     const bossGameState = ref('playing');
     const bossHp = ref(100);
     const playerHp = ref(100);
-    const timer = ref(45); // 45 秒充裕時間
+    const timer = ref(45); // 放寬為 45 秒
     let timerInterval = null;
     const isShaking = ref(false);
     const combatMsg = ref('');
@@ -649,7 +664,7 @@ createApp({
       bossTypedWord.value = '';
       lastRecognizedLetter.value = '';
 
-      // 生成首字母與底線提示（片語空格保留顯示）
+      // 生成提示：片語空格保持顯示
       bossQuizList.value = shuffle([...wordList.value]).map(w => {
         const target = w.word.trim();
         const hintChars = target.split('').map((char, index) => {
@@ -782,10 +797,22 @@ createApp({
       }
     };
 
-    // 新增空白按鈕動作
+    // 新增空白按鈕動作（含輕脆微音效）
     const addSpaceToBossWord = () => {
       if (bossTypedWord.value.length > 0 && !bossTypedWord.value.endsWith(' ')) {
         bossTypedWord.value += ' ';
+        try {
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.frequency.value = 520;
+          gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.08);
+        } catch (e) {}
       }
     };
 
@@ -828,7 +855,6 @@ createApp({
 
     const submitBossAnswer = () => {
       if (bossGameState.value !== 'playing') return;
-      // 去除多餘前後空格進行對比
       const input = bossTypedWord.value.trim().toLowerCase().replace(/\s+/g, ' ');
       const target = currentBossQuestion.value.word.trim().toLowerCase().replace(/\s+/g, ' ');
 
