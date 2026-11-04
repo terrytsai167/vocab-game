@@ -10,21 +10,13 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   <style>
-    /* 全域防反彈捲動與防手勢 */
+    /* 基礎防滑動與字元選取 */
     html, body {
       overscroll-behavior-y: none;
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
       touch-action: manipulation;
-    }
-    
-    /* Boss 戰手寫時鎖死頁面，避免手掌貼住螢幕滑動畫面 */
-    .lock-scroll {
-      overflow: hidden !important;
-      position: fixed;
-      width: 100%;
-      height: 100%;
     }
 
     @keyframes shake {
@@ -36,17 +28,17 @@
       animation: shake 0.4s ease-in-out;
     }
 
-    /* 手寫畫布專屬：徹底阻絕瀏覽器手勢（包括左右滑動上一頁、上下滾動） */
+    /* 畫布區域徹底禁止任何手勢滾動 */
     .handwriting-canvas {
       touch-action: none !important;
       -webkit-user-drag: none;
       user-select: none;
-      -webkit-tap-highlight-color: transparent;
+      display: block;
+      width: 100%;
     }
   </style>
 </head>
-<body class="bg-slate-900 min-h-screen flex items-center justify-center p-2 sm:p-4 text-slate-800"
-      :class="{ 'lock-scroll': currentMode === 'boss' }">
+<body class="bg-slate-900 min-h-screen flex items-center justify-center p-2 sm:p-4 text-slate-800">
 
 <div id="app" class="w-full max-w-2xl bg-white rounded-3xl shadow-2xl p-5 sm:p-8 border-4" :class="borderTheme">
   
@@ -230,7 +222,7 @@
     </div>
   </div>
 
-  <!-- ================= 關卡 4：決戰 Boss 模式 (手寫防手勢干擾版) ================= -->
+  <!-- ================= 關卡 4：決戰 Boss 模式 (精準手寫修復版) ================= -->
   <div v-else-if="currentMode === 'boss'">
     <!-- 戰鬥雙方血量條 -->
     <div class="space-y-2 mb-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
@@ -329,7 +321,7 @@
         </div>
       </div>
 
-      <!-- 手寫板畫布區域（已注入 Touch Event 攔截） -->
+      <!-- 手寫板畫布區域（尺寸 1:1 絕對對齊） -->
       <div class="bg-purple-100/50 border-2 border-dashed border-purple-300 rounded-2xl p-2 flex flex-col items-center relative">
         <div class="flex justify-between w-full px-2 text-[11px] font-bold text-purple-700 mb-1">
           <span>✍️ 在此手寫字母（寫完停筆自動辨識）：</span>
@@ -337,8 +329,8 @@
         </div>
         
         <canvas ref="hwCanvas" 
-                class="handwriting-canvas bg-white rounded-xl shadow-inner w-full border border-purple-200 cursor-crosshair"
-                height="130"></canvas>
+                class="handwriting-canvas bg-white rounded-xl shadow-inner border border-purple-200 cursor-crosshair"
+                height="140"></canvas>
       </div>
 
       <!-- 攻擊操作按鈕 -->
@@ -428,7 +420,7 @@ createApp({
     const bossQuestionIndex = ref(0);
     const bossTypedWord = ref('');
 
-    // 手寫畫布相關狀態
+    // 手寫畫布狀態
     const hwCanvas = ref(null);
     let hwCtx = null;
     let isDrawing = false;
@@ -660,7 +652,7 @@ createApp({
       }
     };
 
-    // ================= Boss 戰手寫辨識與全方位防滑動核心 =================
+    // ================= Boss 戰手寫精準定位修復 =================
     const startBossBattle = () => {
       if (wordList.value.length === 0) return;
       bossHp.value = 100;
@@ -691,14 +683,12 @@ createApp({
       nextTick(() => { initCanvas(); });
     };
 
-    // 取得畫布相對於觸控的精準座標
-    const getCanvasPos = (canvas, clientX, clientY) => {
+    // 1:1 絕對物理座標取得函式（徹底杜絕偏移）
+    const getPointPos = (canvas, clientX, clientY) => {
       const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
       return {
-        x: Math.round((clientX - rect.left) * scaleX),
-        y: Math.round((clientY - rect.top) * scaleY)
+        x: Math.round(clientX - rect.left),
+        y: Math.round(clientY - rect.top)
       };
     };
 
@@ -707,20 +697,18 @@ createApp({
       const canvas = hwCanvas.value;
       const rect = canvas.getBoundingClientRect();
       
-      // 支援 Retina 螢幕清晰度
-      canvas.width = rect.width * (window.devicePixelRatio || 1);
-      canvas.height = 130 * (window.devicePixelRatio || 1);
+      // 關鍵修復：畫布物理寬高與實際顯示寬高嚴格 1:1，不加縮放偏差
+      canvas.width = Math.round(rect.width);
+      canvas.height = 140;
 
       hwCtx = canvas.getContext('2d');
-      hwCtx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
       hwCtx.lineWidth = 4;
       hwCtx.lineCap = 'round';
       hwCtx.lineJoin = 'round';
       hwCtx.strokeStyle = '#4338ca';
       clearCanvas();
 
-      // 核心防護：直接攔截 Touch 事件，徹底阻止 iOS Safari 手勢滑動
-      bindTouchShield(canvas);
+      setupCleanTouchEvents(canvas);
     };
 
     const clearCanvas = () => {
@@ -729,47 +717,34 @@ createApp({
       strokes = [];
     };
 
-    // 防手勢滑動的核心事件綁定（使用 passive: false 才能調用 preventDefault）
-    const bindTouchShield = (canvas) => {
-      // 避免重複綁定
-      if (canvas._shieldAttached) return;
-      canvas._shieldAttached = true;
+    // 乾淨且零干擾的觸控監聽
+    const setupCleanTouchEvents = (canvas) => {
+      if (canvas._touchBound) return;
+      canvas._touchBound = true;
 
-      // 1. TouchStart
-      canvas.addEventListener('touchstart', (e) => {
-        e.preventDefault(); // 阻止 iOS 畫面開始滾動
-        e.stopPropagation();
+      const onStart = (clientX, clientY) => {
         isDrawing = true;
         isWritingActive.value = true;
         clearTimeout(recognizeTimer);
 
-        const touch = e.touches[0];
-        const pos = getCanvasPos(canvas, touch.clientX, touch.clientY);
+        const pos = getPointPos(canvas, clientX, clientY);
         currentStroke = [[pos.x], [pos.y]];
 
         hwCtx.beginPath();
         hwCtx.moveTo(pos.x, pos.y);
-      }, { passive: false });
+      };
 
-      // 2. TouchMove
-      canvas.addEventListener('touchmove', (e) => {
-        e.preventDefault(); // 絕對阻止拖曳視窗或觸發左右滑手勢
-        e.stopPropagation();
+      const onMove = (clientX, clientY) => {
         if (!isDrawing) return;
-
-        const touch = e.touches[0];
-        const pos = getCanvasPos(canvas, touch.clientX, touch.clientY);
+        const pos = getPointPos(canvas, clientX, clientY);
         currentStroke[0].push(pos.x);
         currentStroke[1].push(pos.y);
 
         hwCtx.lineTo(pos.x, pos.y);
         hwCtx.stroke();
-      }, { passive: false });
+      };
 
-      // 3. TouchEnd / Cancel
-      const handleTouchEnd = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+      const onEnd = () => {
         if (!isDrawing) return;
         isDrawing = false;
         if (currentStroke.length && currentStroke[0].length) {
@@ -782,39 +757,35 @@ createApp({
         }, 600);
       };
 
-      canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
-      canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+      // 觸控（iPad / 手機）
+      canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        onStart(touch.clientX, touch.clientY);
+      }, { passive: false });
 
-      // 針對滑鼠操作的備用監聽（電腦端使用）
+      canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        onMove(touch.clientX, touch.clientY);
+      }, { passive: false });
+
+      canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        onEnd();
+      }, { passive: false });
+
+      // 滑鼠（Mac / PC）
       canvas.addEventListener('mousedown', (e) => {
-        isDrawing = true;
-        isWritingActive.value = true;
-        clearTimeout(recognizeTimer);
-        const pos = getCanvasPos(canvas, e.clientX, e.clientY);
-        currentStroke = [[pos.x], [pos.y]];
-        hwCtx.beginPath();
-        hwCtx.moveTo(pos.x, pos.y);
+        onStart(e.clientX, e.clientY);
       });
 
       window.addEventListener('mousemove', (e) => {
-        if (!isDrawing) return;
-        const pos = getCanvasPos(canvas, e.clientX, e.clientY);
-        currentStroke[0].push(pos.x);
-        currentStroke[1].push(pos.y);
-        hwCtx.lineTo(pos.x, pos.y);
-        hwCtx.stroke();
+        onMove(e.clientX, e.clientY);
       });
 
       window.addEventListener('mouseup', () => {
-        if (!isDrawing) return;
-        isDrawing = false;
-        if (currentStroke.length && currentStroke[0].length) {
-          strokes.push(currentStroke);
-        }
-        clearTimeout(recognizeTimer);
-        recognizeTimer = setTimeout(() => {
-          recognizeHandwriting();
-        }, 600);
+        onEnd();
       });
     };
 
