@@ -283,16 +283,24 @@
           <span v-if="isRecognizing" class="text-xs text-purple-500 animate-pulse font-bold">（辨識中...）</span>
         </div>
 
-        <div class="flex gap-1.5">
-          <button @click="backspaceBossWord" 
-                  class="bg-amber-100 hover:bg-amber-200 active:scale-95 text-amber-900 font-bold px-3 py-1.5 rounded-xl text-xs transition">
-            ⌫ 倒退
-          </button>
-          <button @click="clearBossWord" 
-                  class="bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-600 font-bold px-3 py-1.5 rounded-xl text-xs transition">
-            清空
-          </button>
-        </div>
+        <div class="flex gap-1.5 shrink-0 ml-2">
+        <!-- 新增：單字間隔空白鍵 -->
+        <button @click="addSpaceToBossWord" 
+               type="button"
+               class="bg-purple-100 hover:bg-purple-200 active:scale-95 text-purple-900 font-bold px-3 py-1.5 rounded-xl text-xs transition">
+          ␣ 空白
+        </button>
+        <button @click="backspaceBossWord" 
+                type="button"
+               class="bg-amber-100 hover:bg-amber-200 active:scale-95 text-amber-900 font-bold px-3 py-1.5 rounded-xl text-xs transition">
+          ⌫ 倒退
+        </button>
+        <button @click="clearBossWord" 
+                type="button"
+                class="bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-600 font-bold px-3 py-1.5 rounded-xl text-xs transition">
+         清空
+        </button>
+      </div>
       </div>
 
       <!-- 手寫板畫布區域 (Apple Pencil / 手指專用) -->
@@ -751,7 +759,7 @@ createApp({
         if (data && data[1] && data[1][0] && data[1][0][1]) {
           const candidate = data[1][0][1][0];
           if (candidate) {
-            const cleanLetter = candidate.replace(/[^a-zA-Z]/g, '').toLowerCase();
+            const cleanLetter = candidate.replace(/[^a-zA-Z ']/g, '').toLowerCase();
             if (cleanLetter) {
               bossTypedWord.value += cleanLetter;
               lastRecognizedLetter.value = cleanLetter;
@@ -824,7 +832,12 @@ createApp({
         if (playerHp.value <= 0) checkBattleStatus(false);
       }
     };
-
+    const addSpaceToBossWord = () => {
+      // 避免開頭直接加空白，以及避免連續打多個空白
+      if (bossTypedWord.value.length > 0 && !bossTypedWord.value.endsWith(' ')) {
+        bossTypedWord.value += ' ';
+      }
+    };
     const startBossVoiceAttack = () => {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) return;
@@ -947,6 +960,7 @@ createApp({
       handlePointerDown,
       handlePointerMove,
       handlePointerUp,
+      addSpaceToBossWord,
       backspaceBossWord,
       clearBossWord,
       setRate,
