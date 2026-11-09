@@ -86,36 +86,56 @@ const app = createApp({
       }
     });
 
-    // 資料載入
+// 資料載入：優先讀取單字，背景非同步查詢多書本
     const initData = async () => {
       isLoading.value = true;
+
+      // 1. 立即載入預設單字，保證畫面 2 秒內一定能開出來
+      await loadWords();
+
+      // 2. 背景靜默檢查是否有 _CONFIG_ 多書本（不卡住畫面）
       try {
-        const resBooks = await fetch(`${CONFIG.GAS_URL}?action=getBooks`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000); // 6秒逾時防呆
+        
+        const resBooks = await fetch(`${CONFIG.GAS_URL}?action=getBooks`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
         const books = await resBooks.json();
         if (Array.isArray(books) && books.length > 0) {
           bookList.value = books;
-          selectedBookId.value = books[0].id;
-          await loadWords(books[0].id);
-          return;
+          if (!selectedBookId.value) {
+            selectedBookId.value = books[0].id;
+          }
         }
-      } catch (e) {}
-
-      // 如果尚未設定 _CONFIG_，向下相容直接讀取
-      await loadWords();
+      } catch (e) {
+        console.log("多單字本清單讀取略過，使用當前單字庫。");
+      }
     };
 
     const loadWords = async (bookId = '') => {
       isLoading.value = true;
+      const targetUrl = bookId ? `${CONFIG.GAS_URL}?action=getWords&bookId=${bookId}` : CONFIG.GAS_URL;
+
       try {
-        const targetUrl = bookId ? `${CONFIG.GAS_URL}?action=getWords&bookId=${bookId}` : CONFIG.GAS_URL;
-        const res = await fetch(targetUrl);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒逾時
+
+        const res = await fetch(targetUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
         const data = await res.json();
         allRawWords.value = Array.isArray(data) ? data.filter(item => item.word && String(item.word).trim() !== '') : [];
         selectedUnit.value = 'ALL';
         onUnitChange();
       } catch (e) {
-        alert('無法載入單字，請檢查網路連線或 Apps Script 部署網址！');
+        console.error("載入失敗：", e);
+        // 如果單字陣列原本有快取就不報警，否則提示
+        if (allRawWords.value.length === 0) {
+          alert('連線 Google 試算表逾時，請確認 Google Apps Script 部署設定是否設為「所有人 (Anyone)」！');
+        }
       } finally {
+        // 無論成功失敗，一定要關閉讀取畫面
         isLoading.value = false;
       }
     };
