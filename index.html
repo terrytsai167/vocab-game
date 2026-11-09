@@ -28,7 +28,7 @@
       animation: shake 0.4s ease-in-out;
     }
 
-    /* 畫布區域徹底禁止任何手勢滾動 */
+    /* 手寫畫布專屬：徹底阻止 iPad 預設滑動手勢 */
     .handwriting-canvas {
       touch-action: none !important;
       -webkit-user-drag: none;
@@ -74,33 +74,49 @@
     </div>
   </div>
 
-  <!-- 課次切換下拉選單 -->
-  <div class="flex items-center justify-between mb-4 bg-amber-50/90 p-2.5 rounded-2xl border border-amber-200">
-    <div class="flex items-center gap-2">
-      <span class="text-xs sm:text-sm font-black text-amber-900">📚 選擇課次：</span>
-      <select v-model="selectedUnit" 
-              @change="onUnitChange"
-              class="bg-white border border-amber-300 text-amber-950 font-bold py-1 px-3 rounded-xl shadow-sm text-xs sm:text-sm outline-none focus:ring-2 focus:ring-amber-400">
-        <option value="ALL">全部單字 (共 {{ allRawWords.length }} 字)</option>
-        <option v-for="u in unitList" :key="u" :value="u">
-          {{ u }} ({{ getUnitWordCount(u) }} 字)
-        </option>
-      </select>
+  <!-- 多教材書本 (Book) 與課次 (Unit) 雙層連動選單 -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 bg-amber-50/90 p-2.5 rounded-2xl border border-amber-200 gap-2">
+    <div class="flex flex-wrap items-center gap-2">
+      <!-- 單字本切換 -->
+      <div v-if="bookList.length > 1" class="flex items-center gap-1">
+        <span class="text-xs font-black text-amber-900">📘 本冊:</span>
+        <select v-model="selectedBookId" 
+                @change="onBookChange"
+                class="bg-white border border-amber-300 text-amber-950 font-bold py-1 px-2 rounded-xl shadow-sm text-xs outline-none focus:ring-2 focus:ring-amber-400">
+          <option v-for="b in bookList" :key="b.id" :value="b.id">
+            {{ b.name }}
+          </option>
+        </select>
+      </div>
+
+      <!-- 課次切換 -->
+      <div class="flex items-center gap-1">
+        <span class="text-xs font-black text-amber-900">📚 課次:</span>
+        <select v-model="selectedUnit" 
+                @change="onUnitChange"
+                class="bg-white border border-amber-300 text-amber-950 font-bold py-1 px-2.5 rounded-xl shadow-sm text-xs outline-none focus:ring-2 focus:ring-amber-400">
+          <option value="ALL">全部 (共 {{ allRawWords.length }} 字)</option>
+          <option v-for="u in unitList" :key="u" :value="u">
+            {{ u }} ({{ getUnitWordCount(u) }} 字)
+          </option>
+        </select>
+      </div>
     </div>
 
-    <div v-if="currentMode === 'study' && wordList.length > 0" class="text-xs font-bold text-amber-800">
+    <div v-if="currentMode === 'study' && wordList.length > 0" class="text-xs font-bold text-amber-800 self-end sm:self-auto">
       {{ currentIndex + 1 }} / {{ wordList.length }}
     </div>
   </div>
 
-  <!-- 資料載入狀態提示 -->
-  <div v-if="allRawWords.length === 0" class="text-center py-16 text-gray-500 space-y-3">
+  <!-- 資料載入中提示 -->
+  <div v-if="isLoading" class="text-center py-16 text-gray-500 space-y-3">
     <div class="animate-spin text-4xl">⏳</div>
-    <p class="text-base font-bold">正在讀取試算表單字庫...</p>
+    <p class="text-base font-bold">正在讀取單字庫...</p>
   </div>
 
   <!-- ================= 關卡 1：單字溫習模式 ================= -->
   <div v-else-if="currentMode === 'study'">
+    <!-- 語速切換：0.5x, 1.0x, 1.25x -->
     <div class="flex justify-end mb-3">
       <div class="flex gap-1 bg-amber-50 p-1 rounded-xl border border-amber-200 text-xs font-bold">
         <button @click="setRate(0.5)" :class="currentRate === 0.5 ? 'bg-amber-500 text-white' : 'text-gray-600'" class="px-2 py-1 rounded-lg">🐢 0.5x</button>
@@ -222,7 +238,7 @@
     </div>
   </div>
 
-  <!-- ================= 關卡 4：決戰 Boss 模式 (精準手寫修復版) ================= -->
+  <!-- ================= 關卡 4：決戰 Boss 模式 (精準手寫 + 空白反饋) ================= -->
   <div v-else-if="currentMode === 'boss'">
     <!-- 戰鬥雙方血量條 -->
     <div class="space-y-2 mb-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
@@ -246,7 +262,7 @@
         </div>
       </div>
 
-      <!-- 45 秒倒數計時條 -->
+      <!-- 45 秒倒數計時條（動筆手寫時自動凍結並提示） -->
       <div v-if="bossGameState === 'playing'">
         <div class="flex justify-between text-[11px] font-bold text-gray-500 mb-0.5">
           <span class="flex items-center gap-1">
@@ -281,7 +297,7 @@
         </p>
       </div>
 
-      <!-- 目前已辨識的拼字呈現區 -->
+      <!-- 目前已辨識的拼字呈現區 (含空白底線標籤反饋) -->
       <div class="bg-white border-2 border-purple-300 rounded-2xl p-2.5 flex items-center justify-between shadow-sm">
         <div class="flex items-center gap-1.5 pl-2 overflow-x-auto min-h-[38px]">
           <span class="text-xs font-bold text-gray-400 shrink-0">拼字：</span>
@@ -290,6 +306,7 @@
             _____
           </span>
 
+          <!-- 逐字元動態顯示：遇到空格顯示具備底線標籤的 ␣ 空格 徽章 -->
           <div v-else class="flex items-center gap-1">
             <span v-for="(char, idx) in bossTypedWord" :key="idx"
                   :class="char === ' ' 
@@ -303,6 +320,7 @@
         </div>
 
         <div class="flex gap-1.5 shrink-0 ml-2">
+          <!-- 專用空白鍵 -->
           <button @click="addSpaceToBossWord" 
                   type="button"
                   class="bg-purple-100 hover:bg-purple-200 active:scale-90 text-purple-900 font-bold px-3 py-1.5 rounded-xl text-xs transition border border-purple-300 shadow-sm">
@@ -321,7 +339,7 @@
         </div>
       </div>
 
-      <!-- 手寫板畫布區域（尺寸 1:1 絕對對齊） -->
+      <!-- 手寫板畫布區域（1:1 絕對對齊 + 防手勢拖動） -->
       <div class="bg-purple-100/50 border-2 border-dashed border-purple-300 rounded-2xl p-2 flex flex-col items-center relative">
         <div class="flex justify-between w-full px-2 text-[11px] font-bold text-purple-700 mb-1">
           <span>✍️ 在此手寫字母（寫完停筆自動辨識）：</span>
@@ -383,13 +401,18 @@ createApp({
     const allRawWords = ref([]);
     const wordList = ref([]);
     const selectedUnit = ref('ALL');
+    const isLoading = ref(true);
+
+    // 多教材書本清單
+    const bookList = ref([]);
+    const selectedBookId = ref('');
 
     const currentIndex = ref(0);
-    const currentRate = ref(1.0);
+    const currentRate = ref(1.0); // 支援 0.5x, 1.0x, 1.25x
     const stars = ref(0);
     const currentMode = ref('study');
 
-    // 替換為你的 Google Apps Script 網頁應用程式網址
+    // 你的 Google Apps Script 網頁應用程式網址
     const GAS_URL = 'https://script.google.com/macros/s/AKfycbzAmZw5zb9gkAL_S-Xr2ozuu_7stSzUgyOFRRavm0Imfs38cirJXEfKkiTARX9GOIAwyg/exec';
 
     // 試煉關卡狀態
@@ -463,17 +486,50 @@ createApp({
       }
     });
 
-    const fetchWords = async () => {
+    // 1. 初始化資料：先抓取書本清單
+    const initData = async () => {
+      isLoading.value = true;
       try {
-        const res = await fetch(GAS_URL);
-        const data = await res.json();
-        allRawWords.value = data.filter(item => item.word && String(item.word).trim() !== '');
-        onUnitChange();
+        const resBooks = await fetch(`${GAS_URL}?action=getBooks`);
+        const books = await resBooks.json();
+        if (Array.isArray(books) && books.length > 0) {
+          bookList.value = books;
+          selectedBookId.value = books[0].id;
+          await loadWords(books[0].id);
+        } else {
+          // 向下相容單一試算表
+          await loadWords();
+        }
       } catch (e) {
-        alert('無法載入單字，請檢查網路連線或 Apps Script 部署網址！');
+        await loadWords();
+      } finally {
+        isLoading.value = false;
       }
     };
 
+    // 抓取指定試算表的單字資料
+    const loadWords = async (bookId = '') => {
+      isLoading.value = true;
+      try {
+        const targetUrl = bookId ? `${GAS_URL}?action=getWords&bookId=${bookId}` : GAS_URL;
+        const res = await fetch(targetUrl);
+        const data = await res.json();
+        allRawWords.value = Array.isArray(data) ? data.filter(item => item.word && String(item.word).trim() !== '') : [];
+        selectedUnit.value = 'ALL';
+        onUnitChange();
+      } catch (e) {
+        alert('無法載入單字，請檢查網路連線或 Apps Script 部署網址！');
+      } finally {
+        isLoading.value = false;
+      }
+    };
+
+    // 切換單字本
+    const onBookChange = () => {
+      loadWords(selectedBookId.value);
+    };
+
+    // 課次切換
     const onUnitChange = () => {
       if (selectedUnit.value === 'ALL') {
         wordList.value = [...allRawWords.value];
@@ -652,7 +708,7 @@ createApp({
       }
     };
 
-    // ================= Boss 戰手寫精準定位修復 =================
+    // ================= Boss 戰手寫精準定位與防手勢核心 =================
     const startBossBattle = () => {
       if (wordList.value.length === 0) return;
       bossHp.value = 100;
@@ -663,6 +719,7 @@ createApp({
       bossTypedWord.value = '';
       lastRecognizedLetter.value = '';
 
+      // 生成提示：片語空格保持顯示
       bossQuizList.value = shuffle([...wordList.value]).map(w => {
         const target = w.word.trim();
         const hintChars = target.split('').map((char, index) => {
@@ -697,7 +754,7 @@ createApp({
       const canvas = hwCanvas.value;
       const rect = canvas.getBoundingClientRect();
       
-      // 關鍵修復：畫布物理寬高與實際顯示寬高嚴格 1:1，不加縮放偏差
+      // 畫布實體尺寸嚴格 1:1，不加倍率縮放以防偏移
       canvas.width = Math.round(rect.width);
       canvas.height = 140;
 
@@ -717,7 +774,7 @@ createApp({
       strokes = [];
     };
 
-    // 乾淨且零干擾的觸控監聽
+    // 觸控監聽：攔截 iPad 滾動手勢，保證手掌貼附不跑版
     const setupCleanTouchEvents = (canvas) => {
       if (canvas._touchBound) return;
       canvas._touchBound = true;
@@ -789,7 +846,7 @@ createApp({
       });
     };
 
-    // Google 手寫識別 API
+    // Google 手寫識別 API（支援空格與縮寫符號）
     const recognizeHandwriting = async () => {
       if (strokes.length === 0) {
         isWritingActive.value = false;
@@ -836,6 +893,7 @@ createApp({
       }
     };
 
+    // 空白按鈕動作（含提示音）
     const addSpaceToBossWord = () => {
       if (bossTypedWord.value.length > 0 && !bossTypedWord.value.endsWith(' ')) {
         bossTypedWord.value += ' ';
@@ -865,8 +923,9 @@ createApp({
 
     const startBossTimer = () => {
       clearInterval(timerInterval);
-      timer.value = 45;
+      timer.value = 45; // 45 秒倒數
       timerInterval = setInterval(() => {
+        // 動筆手寫中或辨識中自動凍結扣秒
         if (!isDrawing && !isWritingActive.value && !isRecognizing.value) {
           timer.value--;
           if (timer.value <= 0) {
@@ -981,7 +1040,7 @@ createApp({
     };
 
     onMounted(() => {
-      fetchWords();
+      initData();
       window.addEventListener('resize', () => {
         if (currentMode.value === 'boss') initCanvas();
       });
@@ -992,12 +1051,16 @@ createApp({
     });
 
     return {
+      isLoading,
       allRawWords,
       wordList,
       selectedUnit,
       unitList,
       getUnitWordCount,
       onUnitChange,
+      bookList,
+      selectedBookId,
+      onBookChange,
       currentIndex,
       currentRate,
       stars,
