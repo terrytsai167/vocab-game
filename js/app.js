@@ -23,22 +23,18 @@ const app = createApp({
     const stars = ref(0);
     const currentMode = ref('study');
 
-    // 試煉關卡狀態
     const trialList = ref([]);
     const trialIndex = ref(0);
     const trialFeedback = ref('');
     const trialFeedbackColor = ref('text-green-600');
 
-    // 拼字狀態
     const scrambledPool = ref([]);
     const spelledLetters = ref([]);
 
-    // 語音辨識狀態
     const isListening = ref(false);
     const studyFeedback = ref('');
     const studyFeedbackColor = ref('text-green-600');
 
-    // Boss 戰狀態
     const bossGameState = ref('playing');
     const bossHp = ref(100);
     const playerHp = ref(100);
@@ -86,21 +82,18 @@ const app = createApp({
       }
     });
 
-// 資料載入：優先讀取單字，背景非同步查詢多書本
+    // 優先秒開單字庫，背景非同步查詢多書本
     const initData = async () => {
       isLoading.value = true;
-
-      // 1. 立即載入預設單字，保證畫面 2 秒內一定能開出來
-      await loadWords();
-
-      // 2. 背景靜默檢查是否有 _CONFIG_ 多書本（不卡住畫面）
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000); // 6秒逾時防呆
-        
-        const resBooks = await fetch(`${CONFIG.GAS_URL}?action=getBooks`, { signal: controller.signal });
-        clearTimeout(timeoutId);
-        
+        await loadWords();
+      } catch (e) {
+        console.error(e);
+      }
+
+      // 背景默默獲取 _CONFIG_ 書本
+      try {
+        const resBooks = await fetch(`${CONFIG.GAS_URL}?action=getBooks`);
         const books = await resBooks.json();
         if (Array.isArray(books) && books.length > 0) {
           bookList.value = books;
@@ -108,40 +101,30 @@ const app = createApp({
             selectedBookId.value = books[0].id;
           }
         }
-      } catch (e) {
-        console.log("多單字本清單讀取略過，使用當前單字庫。");
-      }
+      } catch (e) {}
     };
 
     const loadWords = async (bookId = '') => {
       isLoading.value = true;
-      const targetUrl = bookId ? `${CONFIG.GAS_URL}?action=getWords&bookId=${bookId}` : CONFIG.GAS_URL;
-
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒逾時
-
-        const res = await fetch(targetUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
+        const targetUrl = bookId ? `${CONFIG.GAS_URL}?action=getWords&bookId=${bookId}` : CONFIG.GAS_URL;
+        const res = await fetch(targetUrl);
         const data = await res.json();
         allRawWords.value = Array.isArray(data) ? data.filter(item => item.word && String(item.word).trim() !== '') : [];
         selectedUnit.value = 'ALL';
         onUnitChange();
       } catch (e) {
-        console.error("載入失敗：", e);
-        // 如果單字陣列原本有快取就不報警，否則提示
+        console.error('載入失敗：', e);
         if (allRawWords.value.length === 0) {
-          alert('連線 Google 試算表逾時，請確認 Google Apps Script 部署設定是否設為「所有人 (Anyone)」！');
+          alert('無法載入單字，請檢查網路連線或 Apps Script 部署網址！');
         }
       } finally {
-        // 無論成功失敗，一定要關閉讀取畫面
         isLoading.value = false;
       }
     };
 
     const onBookChange = (event) => {
-      const bookId = event.target ? event.target.value : event;
+      const bookId = event && event.target ? event.target.value : event;
       selectedBookId.value = bookId;
       loadWords(bookId);
     };
@@ -558,6 +541,3 @@ const app = createApp({
 });
 
 app.mount('#app');
-</script>
-</body>
-</html>
