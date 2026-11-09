@@ -1,12 +1,3 @@
-import { CONFIG } from './config.js';
-import { playSpeech, playClickBeep } from './services/audio.js';
-import NavBar from './components/NavBar.js';
-import BookUnitSelector from './components/BookUnitSelector.js';
-import StudyMode from './components/StudyMode.js';
-import ListenTrial from './components/ListenTrial.js';
-import SpellTrial from './components/SpellTrial.js';
-import BossBattle from './components/BossBattle.js';
-
 const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
 
 const app = createApp({
@@ -63,7 +54,6 @@ const app = createApp({
     const isRecognizing = ref(false);
     const lastRecognizedLetter = ref('');
 
-    // 計算屬性
     const currentWord = computed(() => wordList.value[currentIndex.value]);
     const currentTrialWord = computed(() => trialList.value[trialIndex.value]);
     const currentBossQuestion = computed(() => bossQuizList.value[bossQuestionIndex.value]);
@@ -74,6 +64,10 @@ const app = createApp({
         .filter(u => u !== '');
       return Array.from(new Set(units));
     });
+
+    const getUnitWordCount = (u) => {
+      return allRawWords.value.filter(w => (w.unit ? String(w.unit).trim() : '未分類') === u).length;
+    };
 
     const maskedSentence = computed(() => {
       if (!currentBossQuestion.value) return '';
@@ -102,14 +96,12 @@ const app = createApp({
           bookList.value = books;
           selectedBookId.value = books[0].id;
           await loadWords(books[0].id);
-        } else {
-          await loadWords();
+          return;
         }
-      } catch (e) {
-        await loadWords();
-      } finally {
-        isLoading.value = false;
-      }
+      } catch (e) {}
+
+      // 如果尚未設定 _CONFIG_，向下相容直接讀取
+      await loadWords();
     };
 
     const loadWords = async (bookId = '') => {
@@ -128,12 +120,14 @@ const app = createApp({
       }
     };
 
-    const onBookChange = (bookId) => {
+    const onBookChange = (event) => {
+      const bookId = event.target ? event.target.value : event;
       selectedBookId.value = bookId;
       loadWords(bookId);
     };
 
-    const onUnitChange = (unit) => {
+    const onUnitChange = (event) => {
+      const unit = event && event.target ? event.target.value : event;
       if (unit) selectedUnit.value = unit;
       if (selectedUnit.value === 'ALL') {
         wordList.value = [...allRawWords.value];
@@ -149,7 +143,6 @@ const app = createApp({
     };
 
     const shuffle = (arr) => arr.sort(() => Math.random() - 0.5);
-
     const speak = (text) => playSpeech(text, currentRate.value);
 
     const setRate = (r) => {
@@ -519,6 +512,7 @@ const app = createApp({
       isRecognizing,
       isWritingActive,
       lastRecognizedLetter,
+      loadWords,
       onBookChange,
       onUnitChange,
       setRate,
@@ -544,3 +538,6 @@ const app = createApp({
 });
 
 app.mount('#app');
+</script>
+</body>
+</html>

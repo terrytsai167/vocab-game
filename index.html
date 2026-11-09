@@ -6,10 +6,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>字島大冒險 - 勇者試煉之路</title>
-  <!-- Vue 3 & Tailwind CSS & Confetti via CDN -->
-  <script src="https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js" type="module"></script>
+  
+  <!-- Vue 3 全域版、Tailwind CSS、彩帶特效 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  
   <style>
     html, body {
       overscroll-behavior-y: none;
@@ -23,9 +25,9 @@
       20%, 60% { transform: translateX(-8px); }
       40%, 80% { transform: translateX(8px); }
     }
-    .shake-anim {
-      animation: shake 0.4s ease-in-out;
-    }
+    .shake-anim { animation: shake 0.4s ease-in-out; }
+    
+    /* 阻絕 iPad Safari 畫布滑動手勢 */
     .handwriting-canvas {
       touch-action: none !important;
       -webkit-user-drag: none;
@@ -39,10 +41,10 @@
 
 <div id="app" class="w-full max-w-2xl bg-white rounded-3xl shadow-2xl p-5 sm:p-8 border-4" :class="borderTheme">
   
-  <!-- 頂部導航列組件 -->
+  <!-- 頂部導航組件 -->
   <nav-bar :current-mode="currentMode" :stars="stars" @set-mode="setMode"></nav-bar>
 
-  <!-- 書本與課次選單組件 -->
+  <!-- 雙層選單組件 (本冊/課次) -->
   <book-unit-selector 
     :book-list="bookList"
     :selected-book-id="selectedBookId"
@@ -56,13 +58,14 @@
     @change-unit="onUnitChange"
   ></book-unit-selector>
 
-  <!-- 載入中動畫 -->
+  <!-- 讀取中提示 -->
   <div v-if="isLoading" class="text-center py-16 text-gray-500 space-y-3">
     <div class="animate-spin text-4xl">⏳</div>
     <p class="text-base font-bold">正在讀取單字庫...</p>
+    <button @click="loadWords()" class="text-xs text-blue-500 underline pt-2">點此手動重試</button>
   </div>
 
-  <!-- 四大模式切換渲染 -->
+  <!-- 各關卡模式組件 -->
   <template v-else>
     <study-mode 
       v-if="currentMode === 'study'"
@@ -135,7 +138,10 @@
 
 </div>
 
-<!-- 引入模組化入口 -->
-<script type="module" src="./js/app.js"></script>
+<!-- 依序載入模組檔案（標準 script 載入，本機雙擊開啟或部署 GitHub 均免除 CORS 與 ESM 限制） -->
+<script src="./js/config.js"></script>
+<script src="./js/services.js"></script>
+<script src="./js/components.js"></script>
+<script src="./js/app.js"></script>
 </body>
 </html>
