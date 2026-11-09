@@ -7,8 +7,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>字島大冒險 - 勇者試煉之路</title>
   
-  <!-- Vue 3 全域版、Tailwind CSS、彩帶特效 -->
-  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- 關鍵修復：使用包含 DOM 模板編譯器的完整版 vue.global.js -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   
@@ -138,7 +138,7 @@
 
 </div>
 
-<!-- 依序載入模組檔案（標準 script 載入，本機雙擊開啟或部署 GitHub 均免除 CORS 與 ESM 限制） -->
+<!-- 依序載入模組 -->
 <script src="./js/config.js"></script>
 <script src="./js/services.js"></script>
 <script src="./js/components.js"></script>
