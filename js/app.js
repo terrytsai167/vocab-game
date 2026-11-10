@@ -45,7 +45,7 @@ const app = createApp({
     const visibleBookList = computed(() => {
       const assigned = currentUser.value.assignedBookIds || [];
       if (!assigned || assigned.length === 0) {
-        return allAvailableBooks.value; // 未限制時看全部
+        return allAvailableBooks.value;
       }
       return allAvailableBooks.value.filter(b => assigned.includes(b.id));
     });
@@ -100,11 +100,13 @@ const app = createApp({
       return allRawWords.value.filter(w => (w.unit ? String(w.unit).trim() : '未分類') === u).length;
     };
 
+    // 已修復語法錯誤的句子遮罩
     const maskedSentence = computed(() => {
       if (!currentBossQuestion.value) return '';
       const s = currentBossQuestion.value.sentence || '';
       const w = currentBossQuestion.value.word || '';
-      const regex = new RegExp(w.replace(/[.*+?^${}()|[\]\]/g, '\$&'), 'gi');
+      const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'gi');
       return s.replace(regex, '______');
     });
 
@@ -121,7 +123,6 @@ const app = createApp({
     const switchUser = (userId) => {
       currentUserId.value = userId;
       StorageService.saveActiveUserId(userId);
-      // 根據切換後的課本權限重新校驗選取的書本
       if (visibleBookList.value.length > 0) {
         const found = visibleBookList.value.find(b => b.id === selectedBookId.value);
         if (!found) {
@@ -139,7 +140,6 @@ const app = createApp({
         target.assignedBookIds = updated.assignedBookIds;
         saveUserData();
 
-        // 重新檢查目前讀取的課本
         if (visibleBookList.value.length > 0) {
           const match = visibleBookList.value.find(b => b.id === selectedBookId.value);
           if (!match) {
@@ -163,8 +163,7 @@ const app = createApp({
         listenCorrect: 0,
         spellAttempts: 0,
         spellCorrect: 0,
-        bossVictories: 0,
-        recentLogs: []
+        bossVictories: 0
       });
       saveUserData();
       switchUser(newId);
@@ -181,7 +180,7 @@ const app = createApp({
       }
     };
 
-    // 歷程紀錄函式
+    // 歷程數據累加
     const recordWordStudied = (word) => {
       if (!word) return;
       if (!currentUser.value.studiedWords) currentUser.value.studiedWords = {};
@@ -213,7 +212,7 @@ const app = createApp({
       saveUserData();
     };
 
-    // 資料載入：優先快開，背景查詢書本清單
+    // 資料載入
     const initData = async () => {
       isLoading.value = true;
       try {
@@ -222,13 +221,12 @@ const app = createApp({
         console.error(e);
       }
 
-      // 背景查詢多書本清單
+      // 背景靜默讀取 _CONFIG_ 書本
       try {
         const resBooks = await fetch(`${CONFIG.GAS_URL}?action=getBooks`);
         const books = await resBooks.json();
         if (Array.isArray(books) && books.length > 0) {
           allAvailableBooks.value = books;
-          // 若目前使用者有指定書本
           if (visibleBookList.value.length > 0 && !selectedBookId.value) {
             selectedBookId.value = visibleBookList.value[0].id;
           }
