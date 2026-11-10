@@ -1,6 +1,47 @@
 // ==================== UI 組件模組 ====================
 
-// 1. 頂部模式導航列
+// 頂部勇者資訊列 (切換小孩、星幣、歷程按鈕)
+const ProfileBar = {
+  name: 'ProfileBar',
+  props: ['currentUser', 'users'],
+  emits: ['switch-user', 'open-profile-modal'],
+  template: `
+    <div class="flex items-center justify-between bg-gradient-to-r from-amber-500 to-indigo-600 text-white px-3 sm:px-4 py-2 rounded-2xl mb-3 shadow-md">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl">{{ currentUser.avatar || '🧙‍♂️' }}</span>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span class="font-black text-sm sm:text-base tracking-wide">{{ currentUser.name }}</span>
+            <span class="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full font-bold">勇者</span>
+          </div>
+          <div class="text-[10px] sm:text-xs text-amber-200 font-bold">
+            已擊敗巨龍: {{ currentUser.bossVictories }} 次
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <!-- 使用者切換下拉 -->
+        <select :value="currentUser.id" 
+                @change="$emit('switch-user', $event.target.value)"
+                class="bg-white/20 hover:bg-white/30 text-white font-bold py-1 px-2 rounded-xl text-xs outline-none cursor-pointer border border-white/30">
+          <option v-for="u in users" :key="u.id" :value="u.id" class="text-slate-800">
+            {{ u.avatar }} {{ u.name }}
+          </option>
+        </select>
+
+        <!-- 歷程與課本設定按鈕 -->
+        <button @click="$emit('open-profile-modal')" 
+                type="button"
+                class="bg-white text-indigo-950 hover:bg-amber-100 active:scale-95 font-black px-2.5 py-1 rounded-xl text-xs shadow transition flex items-center gap-1">
+          📊 <span>歷程/課本</span>
+        </button>
+      </div>
+    </div>
+  `
+};
+
+// 頂部模式導航列
 const NavBar = {
   name: 'NavBar',
   props: ['currentMode', 'stars'],
@@ -28,7 +69,7 @@ const NavBar = {
   `
 };
 
-// 2. 書本與課次選單組件
+// 書本與課次選單組件 (依使用者指定權限過濾課本)
 const BookUnitSelector = {
   name: 'BookUnitSelector',
   props: ['bookList', 'selectedBookId', 'unitList', 'selectedUnit', 'totalWords', 'currentMode', 'currentIndex', 'currentWordCount'],
@@ -59,7 +100,172 @@ const BookUnitSelector = {
   `
 };
 
-// 3. 單字溫習模式組件
+// 學習歷程與小孩課本指定彈跳視窗 (Modal)
+const UserProfileModal = {
+  name: 'UserProfileModal',
+  props: ['show', 'currentUser', 'users', 'allAvailableBooks'],
+  emits: ['close', 'save-user-settings', 'add-user', 'delete-user'],
+  data() {
+    return {
+      editName: '',
+      editAvatar: '🧙‍♂️',
+      selectedBooks: [],
+      newUserName: '',
+      newUserAvatar: '🧝‍♀️',
+      avatarList: ['🧙‍♂️', '🧝‍♀️', '🦸‍♂️', '🦸‍♀️', '🥷', '🧑‍🚀', '👸', '🤴', '🦁', '🦖']
+    };
+  },
+  watch: {
+    currentUser: {
+      immediate: true,
+      handler(u) {
+        if (u) {
+          this.editName = u.name || '';
+          this.editAvatar = u.avatar || '🧙‍♂️';
+          this.selectedBooks = Array.isArray(u.assignedBookIds) ? [...u.assignedBookIds] : [];
+        }
+      }
+    }
+  },
+  computed: {
+    studiedCount() {
+      if (!this.currentUser || !this.currentUser.studiedWords) return 0;
+      return Object.keys(this.currentUser.studiedWords).length;
+    },
+    listenRate() {
+      if (!this.currentUser || !this.currentUser.listenAttempts) return 0;
+      return Math.round((this.currentUser.listenCorrect / this.currentUser.listenAttempts) * 100);
+    },
+    spellRate() {
+      if (!this.currentUser || !this.currentUser.spellAttempts) return 0;
+      return Math.round((this.currentUser.spellCorrect / this.currentUser.spellAttempts) * 100);
+    }
+  },
+  methods: {
+    toggleBook(bookId) {
+      const idx = this.selectedBooks.indexOf(bookId);
+      if (idx > -1) {
+        this.selectedBooks.splice(idx, 1);
+      } else {
+        this.selectedBooks.push(bookId);
+      }
+    },
+    saveCurrent() {
+      this.$emit('save-user-settings', {
+        id: this.currentUser.id,
+        name: this.editName.trim() || this.currentUser.name,
+        avatar: this.editAvatar,
+        assignedBookIds: this.selectedBooks
+      });
+      this.$emit('close');
+    },
+    addNewUser() {
+      if (!this.newUserName.trim()) return;
+      this.$emit('add-user', {
+        name: this.newUserName.trim(),
+        avatar: this.newUserAvatar
+      });
+      this.newUserName = '';
+    }
+  },
+  template: `
+    <div v-if="show" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3">
+      <div class="bg-white w-full max-w-lg rounded-3xl p-5 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto border-4 border-indigo-200">
+        
+        <!-- 標題列 -->
+        <div class="flex items-center justify-between pb-3 border-b border-gray-100">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">📜</span>
+            <h2 class="text-xl font-black text-slate-800">勇者冒險日誌 & 學習狀態</h2>
+          </div>
+          <button @click="$emit('close')" class="text-gray-400 hover:text-gray-600 text-xl font-bold p-1">✕</button>
+        </div>
+
+        <!-- 1. 學習歷程數據卡片 -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 text-center">
+          <div class="bg-amber-50 border border-amber-200 rounded-2xl p-2.5">
+            <div class="text-xs font-bold text-amber-800">⭐ 累積星幣</div>
+            <div class="text-xl font-black text-amber-950 mt-0.5">{{ currentUser.stars }}</div>
+          </div>
+          <div class="bg-blue-50 border border-blue-200 rounded-2xl p-2.5">
+            <div class="text-xs font-bold text-blue-800">📖 已學單字</div>
+            <div class="text-xl font-black text-blue-950 mt-0.5">{{ studiedCount }} 字</div>
+          </div>
+          <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-2.5">
+            <div class="text-xs font-bold text-emerald-800">👂 聽力答對率</div>
+            <div class="text-xl font-black text-emerald-950 mt-0.5">{{ listenRate }}%</div>
+          </div>
+          <div class="bg-purple-50 border border-purple-200 rounded-2xl p-2.5">
+            <div class="text-xs font-bold text-purple-800">🐉 巨龍斬擊</div>
+            <div class="text-xl font-black text-purple-950 mt-0.5">{{ currentUser.bossVictories }} 勝</div>
+          </div>
+        </div>
+
+        <!-- 2. 小孩基本資料修改 -->
+        <div class="mt-5 space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+          <div class="text-xs font-black text-slate-700">✏️ 目前使用者設定：</div>
+          <div class="flex items-center gap-2">
+            <input v-model="editName" type="text" placeholder="小孩姓名/稱呼"
+                   class="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-sm font-bold flex-1 outline-none focus:ring-2 focus:ring-indigo-400">
+            <div class="flex gap-1 overflow-x-auto py-1">
+              <span v-for="av in avatarList" :key="av" @click="editAvatar = av"
+                    :class="editAvatar === av ? 'bg-indigo-200 border-2 border-indigo-600 scale-110' : 'bg-white border border-slate-200'"
+                    class="cursor-pointer text-lg p-1 rounded-xl transition">
+                {{ av }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. 指定該使用者學習的課本 (多課本綁定) -->
+        <div class="mt-4 space-y-2">
+          <div class="flex justify-between items-center">
+            <div class="text-xs font-black text-slate-800">📚 指定此勇者的學習課本：</div>
+            <span class="text-[11px] text-gray-500 font-bold">（不勾選代表可見全部）</span>
+          </div>
+          <div class="space-y-1.5 max-h-36 overflow-y-auto bg-slate-50 p-2.5 rounded-2xl border border-slate-200">
+            <label v-for="b in allAvailableBooks" :key="b.id" 
+                   class="flex items-center gap-2 p-1.5 bg-white rounded-xl border border-slate-200 cursor-pointer hover:bg-indigo-50">
+              <input type="checkbox" 
+                     :checked="selectedBooks.includes(b.id)"
+                     @change="toggleBook(b.id)"
+                     class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500">
+              <span class="text-xs font-bold text-slate-700">{{ b.name }}</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 4. 新增另一位小孩/勇者 -->
+        <div class="mt-4 pt-3 border-t border-gray-100 flex items-center gap-2">
+          <input v-model="newUserName" type="text" placeholder="新增小孩 (例如: 二寶)"
+                 class="bg-white border border-slate-300 rounded-xl px-3 py-1 text-xs font-bold flex-1 outline-none">
+          <select v-model="newUserAvatar" class="bg-white border border-slate-300 rounded-xl px-2 py-1 text-xs font-bold">
+            <option v-for="av in avatarList" :key="av" :value="av">{{ av }}</option>
+          </select>
+          <button @click="addNewUser" type="button" 
+                  class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1 rounded-xl text-xs shadow">
+            + 新增勇者
+          </button>
+        </div>
+
+        <!-- 底部儲存確認 -->
+        <div class="mt-5 flex gap-2">
+          <button @click="saveCurrent" type="button" 
+                  class="flex-1 bg-gradient-to-r from-amber-500 to-indigo-600 text-white font-black py-2.5 rounded-2xl text-sm shadow-md active:scale-95 transition">
+            儲存學習設定 ➔
+          </button>
+          <button v-if="users.length > 1" @click="$emit('delete-user', currentUser.id)" type="button"
+                  class="bg-red-100 text-red-600 font-bold px-3 py-2.5 rounded-2xl text-xs hover:bg-red-200 transition">
+            刪除
+          </button>
+        </div>
+
+      </div>
+    </div>
+  `
+};
+
+// 單字溫習組件
 const StudyMode = {
   name: 'StudyMode',
   props: ['word', 'currentRate', 'isListening', 'feedback', 'feedbackColor'],
@@ -103,7 +309,7 @@ const StudyMode = {
   `
 };
 
-// 4. 聽力試煉組件
+// 聽力試煉組件
 const ListenTrial = {
   name: 'ListenTrial',
   props: ['word', 'trialIndex', 'totalTrials', 'feedback', 'feedbackColor'],
@@ -132,7 +338,7 @@ const ListenTrial = {
   `
 };
 
-// 5. 拼字試煉組件
+// 拼字試煉組件
 const SpellTrial = {
   name: 'SpellTrial',
   props: ['word', 'trialIndex', 'totalTrials', 'spelledLetters', 'scrambledPool', 'feedback', 'feedbackColor'],
@@ -172,7 +378,7 @@ const SpellTrial = {
   `
 };
 
-// 6. 決戰 Boss 組件 (1:1 絕對座標畫布與防手勢拖動)
+// 決戰 Boss 組件
 const BossBattle = {
   name: 'BossBattle',
   props: [

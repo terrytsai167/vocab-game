@@ -2,39 +2,74 @@ const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
 
 const app = createApp({
   components: {
+    ProfileBar,
     NavBar,
     BookUnitSelector,
+    UserProfileModal,
     StudyMode,
     ListenTrial,
     SpellTrial,
     BossBattle
   },
   setup() {
+    // 使用者歷程與狀態
+    const users = ref(StorageService.loadUsers());
+    const currentUserId = ref(StorageService.loadActiveUserId());
+    const showProfileModal = ref(false);
+
+    const currentUser = computed(() => {
+      return users.value.find(u => u.id === currentUserId.value) || users.value[0];
+    });
+
+    const stars = computed({
+      get: () => currentUser.value.stars || 0,
+      set: (val) => {
+        currentUser.value.stars = val;
+        saveUserData();
+      }
+    });
+
+    const saveUserData = () => {
+      StorageService.saveUsers(users.value);
+    };
+
+    // 書本與單字資料
+    const allAvailableBooks = ref([]);
     const allRawWords = ref([]);
     const wordList = ref([]);
+    const selectedBookId = ref('');
     const selectedUnit = ref('ALL');
     const isLoading = ref(true);
 
-    const bookList = ref([]);
-    const selectedBookId = ref('');
+    // 依據目前小孩「指定課本」過濾可見清單
+    const visibleBookList = computed(() => {
+      const assigned = currentUser.value.assignedBookIds || [];
+      if (!assigned || assigned.length === 0) {
+        return allAvailableBooks.value; // 未限制時看全部
+      }
+      return allAvailableBooks.value.filter(b => assigned.includes(b.id));
+    });
 
     const currentIndex = ref(0);
     const currentRate = ref(1.0);
-    const stars = ref(0);
     const currentMode = ref('study');
 
+    // 試煉關卡狀態
     const trialList = ref([]);
     const trialIndex = ref(0);
     const trialFeedback = ref('');
     const trialFeedbackColor = ref('text-green-600');
 
+    // 拼字狀態
     const scrambledPool = ref([]);
     const spelledLetters = ref([]);
 
+    // 語音辨識狀態
     const isListening = ref(false);
     const studyFeedback = ref('');
     const studyFeedbackColor = ref('text-green-600');
 
+    // Boss 戰狀態
     const bossGameState = ref('playing');
     const bossHp = ref(100);
     const playerHp = ref(100);
@@ -69,7 +104,7 @@ const app = createApp({
       if (!currentBossQuestion.value) return '';
       const s = currentBossQuestion.value.sentence || '';
       const w = currentBossQuestion.value.word || '';
-      const regex = new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      const regex = new RegExp(w.replace(/[.*+?^${}()|[\]\]/g, '\$&'), 'gi');
       return s.replace(regex, '______');
     });
 
@@ -82,7 +117,103 @@ const app = createApp({
       }
     });
 
-    // 優先秒開單字庫，背景非同步查詢多書本
+    // 切換小孩勇者
+    const switchUser = (userId) => {
+      currentUserId.value = userId;
+      StorageService.saveActiveUserId(userId);
+      // 根據切換後的課本權限重新校驗選取的書本
+      if (visibleBookList.value.length > 0) {
+        const found = visibleBookList.value.find(b => b.id === selectedBookId.value);
+        if (!found) {
+          selectedBookId.value = visibleBookList.value[0].id;
+          loadWords(selectedBookId.value);
+        }
+      }
+    };
+
+    const onSaveUserSettings = (updated) => {
+      const target = users.value.find(u => u.id === updated.id);
+      if (target) {
+        target.name = updated.name;
+        target.avatar = updated.avatar;
+        target.assignedBookIds = updated.assignedBookIds;
+        saveUserData();
+
+        // 重新檢查目前讀取的課本
+        if (visibleBookList.value.length > 0) {
+          const match = visibleBookList.value.find(b => b.id === selectedBookId.value);
+          if (!match) {
+            selectedBookId.value = visibleBookList.value[0].id;
+            loadWords(selectedBookId.value);
+          }
+        }
+      }
+    };
+
+    const onAddUser = (newU) => {
+      const newId = 'user_' + Date.now();
+      users.value.push({
+        id: newId,
+        name: newU.name,
+        avatar: newU.avatar,
+        assignedBookIds: [],
+        stars: 0,
+        studiedWords: {},
+        listenAttempts: 0,
+        listenCorrect: 0,
+        spellAttempts: 0,
+        spellCorrect: 0,
+        bossVictories: 0,
+        recentLogs: []
+      });
+      saveUserData();
+      switchUser(newId);
+    };
+
+    const onDeleteUser = (userId) => {
+      if (users.value.length <= 1) return;
+      if (confirm('確定要刪除這位小勇者的學習紀錄嗎？')) {
+        users.value = users.value.filter(u => u.id !== userId);
+        currentUserId.value = users.value[0].id;
+        saveUserData();
+        switchUser(currentUserId.value);
+        showProfileModal.value = false;
+      }
+    };
+
+    // 歷程紀錄函式
+    const recordWordStudied = (word) => {
+      if (!word) return;
+      if (!currentUser.value.studiedWords) currentUser.value.studiedWords = {};
+      currentUser.value.studiedWords[word] = (currentUser.value.studiedWords[word] || 0) + 1;
+      saveUserData();
+    };
+
+    const recordListenResult = (isCorrect) => {
+      currentUser.value.listenAttempts = (currentUser.value.listenAttempts || 0) + 1;
+      if (isCorrect) {
+        currentUser.value.listenCorrect = (currentUser.value.listenCorrect || 0) + 1;
+        stars.value += 1;
+      }
+      saveUserData();
+    };
+
+    const recordSpellResult = (isCorrect) => {
+      currentUser.value.spellAttempts = (currentUser.value.spellAttempts || 0) + 1;
+      if (isCorrect) {
+        currentUser.value.spellCorrect = (currentUser.value.spellCorrect || 0) + 1;
+        stars.value += 2;
+      }
+      saveUserData();
+    };
+
+    const recordBossVictory = () => {
+      currentUser.value.bossVictories = (currentUser.value.bossVictories || 0) + 1;
+      stars.value += 10;
+      saveUserData();
+    };
+
+    // 資料載入：優先快開，背景查詢書本清單
     const initData = async () => {
       isLoading.value = true;
       try {
@@ -91,17 +222,20 @@ const app = createApp({
         console.error(e);
       }
 
-      // 背景默默獲取 _CONFIG_ 書本
+      // 背景查詢多書本清單
       try {
         const resBooks = await fetch(`${CONFIG.GAS_URL}?action=getBooks`);
         const books = await resBooks.json();
         if (Array.isArray(books) && books.length > 0) {
-          bookList.value = books;
-          if (!selectedBookId.value) {
-            selectedBookId.value = books[0].id;
+          allAvailableBooks.value = books;
+          // 若目前使用者有指定書本
+          if (visibleBookList.value.length > 0 && !selectedBookId.value) {
+            selectedBookId.value = visibleBookList.value[0].id;
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        allAvailableBooks.value = [{ name: '預設單字本', id: 'default' }];
+      }
     };
 
     const loadWords = async (bookId = '') => {
@@ -179,10 +313,12 @@ const app = createApp({
     };
 
     const checkListenAnswer = (selected) => {
-      if (selected === currentTrialWord.value.correctMeaning) {
+      const isCorrect = (selected === currentTrialWord.value.correctMeaning);
+      recordListenResult(isCorrect);
+
+      if (isCorrect) {
         trialFeedback.value = '🎉 聽得真準！太棒了！ (+1 ⭐)';
         trialFeedbackColor.value = 'text-green-600';
-        stars.value++;
         speak('Great job!');
         setTimeout(() => {
           trialFeedback.value = '';
@@ -237,11 +373,12 @@ const app = createApp({
     const checkSpelling = () => {
       const spelled = spelledLetters.value.join('');
       const target = currentTrialWord.value.word.trim();
+      const isCorrect = (spelled.toLowerCase() === target.toLowerCase());
+      recordSpellResult(isCorrect);
 
-      if (spelled.toLowerCase() === target.toLowerCase()) {
+      if (isCorrect) {
         trialFeedback.value = '🎯 拼字完全正確！ (+2 ⭐)';
         trialFeedbackColor.value = 'text-green-600';
-        stars.value += 2;
         speak('Awesome!');
         setTimeout(() => {
           trialFeedback.value = '';
@@ -277,6 +414,7 @@ const app = createApp({
           studyFeedback.value = '🌟 太棒了！發音非常標準！';
           studyFeedbackColor.value = 'text-green-600';
           speak('Awesome!');
+          recordWordStudied(currentWord.value.word);
         } else {
           studyFeedback.value = `聽到的是 "${spoken}"，再試一次！`;
           studyFeedbackColor.value = 'text-orange-500';
@@ -287,6 +425,9 @@ const app = createApp({
     };
 
     const nextWord = () => {
+      if (currentWord.value) {
+        recordWordStudied(currentWord.value.word);
+      }
       studyFeedback.value = '';
       if (currentIndex.value < wordList.value.length - 1) {
         currentIndex.value++;
@@ -390,6 +531,7 @@ const app = createApp({
         combatMsg.value = `🎯 完美背對單字！對 Boss 造成 ${damage} 點重傷！`;
         combatMsgColor.value = 'text-green-600';
         speak('Great!');
+        recordWordStudied(currentBossQuestion.value.word);
         checkBattleStatus(true);
       } else {
         triggerShake();
@@ -418,6 +560,7 @@ const app = createApp({
           combatMsg.value = `🎤 口說背誦成功！發動音波重擊 ${damage} 點！`;
           combatMsgColor.value = 'text-purple-600';
           speak('Awesome!');
+          recordWordStudied(currentBossQuestion.value.word);
           checkBattleStatus(true);
         } else {
           combatMsg.value = `聽到的是 "${spoken}"，不太對喔！`;
@@ -432,7 +575,7 @@ const app = createApp({
       if (bossHp.value <= 0) {
         clearInterval(timerInterval);
         bossGameState.value = 'victory';
-        stars.value += 10;
+        recordBossVictory();
         if (window.confetti) {
           confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
         }
@@ -458,7 +601,7 @@ const app = createApp({
             clearInterval(timerInterval);
             if (bossHp.value <= 25) {
               bossGameState.value = 'victory';
-              stars.value += 10;
+              recordBossVictory();
               if (window.confetti) confetti();
             } else {
               bossGameState.value = 'gameover';
@@ -477,12 +620,21 @@ const app = createApp({
     });
 
     return {
+      users,
+      currentUser,
+      currentUserId,
+      showProfileModal,
+      switchUser,
+      onSaveUserSettings,
+      onAddUser,
+      onDeleteUser,
+      allAvailableBooks,
+      visibleBookList,
       isLoading,
       allRawWords,
       wordList,
       selectedUnit,
       unitList,
-      bookList,
       selectedBookId,
       currentIndex,
       currentRate,

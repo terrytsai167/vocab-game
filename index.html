@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>字島大冒險 - 勇者試煉之路</title>
   
-  <!-- 關鍵修復：使用包含 DOM 模板編譯器的完整版 vue.global.js -->
+  <!-- 完整版 Vue 3 (含 DOM 模板編譯器)、Tailwind CSS、彩帶特效 -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
@@ -41,12 +41,20 @@
 
 <div id="app" class="w-full max-w-2xl bg-white rounded-3xl shadow-2xl p-5 sm:p-8 border-4" :class="borderTheme">
   
-  <!-- 頂部導航組件 -->
+  <!-- 小孩勇者身分列 (頭像、姓名、星幣與歷程彈窗按鈕) -->
+  <profile-bar 
+    :current-user="currentUser" 
+    :users="users"
+    @switch-user="switchUser"
+    @open-profile-modal="showProfileModal = true"
+  ></profile-bar>
+
+  <!-- 頂部模式導航列 -->
   <nav-bar :current-mode="currentMode" :stars="stars" @set-mode="setMode"></nav-bar>
 
-  <!-- 雙層選單組件 (本冊/課次) -->
+  <!-- 雙層選單組件 (本冊/課次：依小孩指定課本自動過濾) -->
   <book-unit-selector 
-    :book-list="bookList"
+    :book-list="visibleBookList"
     :selected-book-id="selectedBookId"
     :unit-list="unitList"
     :selected-unit="selectedUnit"
@@ -136,9 +144,21 @@
     ></boss-battle>
   </template>
 
+  <!-- 學習歷程與課本指定彈跳面板 -->
+  <user-profile-modal
+    :show="showProfileModal"
+    :current-user="currentUser"
+    :users="users"
+    :all-available-books="allAvailableBooks"
+    @close="showProfileModal = false"
+    @save-user-settings="onSaveUserSettings"
+    @add-user="onAddUser"
+    @delete-user="onDeleteUser"
+  ></user-profile-modal>
+
 </div>
 
-<!-- 依序載入模組 -->
+<!-- 依序載入模組檔案（標準 script 載入，免除 CORS 與 ESM 限制） -->
 <script src="./js/config.js"></script>
 <script src="./js/services.js"></script>
 <script src="./js/components.js"></script>

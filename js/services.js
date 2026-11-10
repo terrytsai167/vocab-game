@@ -1,4 +1,4 @@
-// 語音朗讀與音效服務
+// ==================== 語音與手寫 API ====================
 function playSpeech(text, rate = 1.0) {
   if (!text) return;
   window.speechSynthesis.cancel();
@@ -31,7 +31,6 @@ function playClickBeep(freq = 520) {
   } catch (e) {}
 }
 
-// Google 免費手寫辨識 API 呼叫
 async function recognizeInk(strokes, width = 600, height = 140) {
   if (!strokes || strokes.length === 0) return '';
   const payload = {
@@ -57,7 +56,58 @@ async function recognizeInk(strokes, width = 600, height = 140) {
       }
     }
   } catch (e) {
-    console.warn('手寫辨識微延遲', e);
+    console.warn('手寫辨識延遲', e);
   }
   return '';
 }
+
+// ==================== 學習歷程 LocalStorage 管理服務 ====================
+const StorageService = {
+  getDefaultUsers() {
+    return [
+      {
+        id: 'user_1',
+        name: '小勇者 A',
+        avatar: '🧙‍♂️',
+        assignedBookIds: [], // 空陣列表示所有課本均可看，或指定特定 book ID
+        stars: 0,
+        studiedWords: {}, // { "easier": count }
+        listenAttempts: 0,
+        listenCorrect: 0,
+        spellAttempts: 0,
+        spellCorrect: 0,
+        bossVictories: 0,
+        recentLogs: []
+      }
+    ];
+  },
+
+  loadUsers() {
+    try {
+      const raw = localStorage.getItem(CONFIG.STORAGE_KEY_USERS);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    const defaults = this.getDefaultUsers();
+    this.saveUsers(defaults);
+    return defaults;
+  },
+
+  saveUsers(users) {
+    try {
+      localStorage.setItem(CONFIG.STORAGE_KEY_USERS, JSON.stringify(users));
+    } catch (e) {}
+  },
+
+  loadActiveUserId() {
+    return localStorage.getItem(CONFIG.STORAGE_KEY_ACTIVE_USER) || 'user_1';
+  },
+
+  saveActiveUserId(id) {
+    try {
+      localStorage.setItem(CONFIG.STORAGE_KEY_ACTIVE_USER, id);
+    } catch (e) {}
+  }
+};
