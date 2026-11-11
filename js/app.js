@@ -32,7 +32,12 @@ const app = createApp({
     const saveUserData = () => {
       StorageService.saveUsers(users.value);
     };
-
+    
+    // PC 鍵盤即時輸入綁定
+    const onUpdateTypedWord = (val) => {
+      bossTypedWord.value = val;
+    };
+    
     // 書本與單字資料
     const allAvailableBooks = ref([]);
     const allRawWords = ref([]);
@@ -681,6 +686,7 @@ const app = createApp({
       startBossBattle,
       onWritingStart,
       onWritingEnd,
+      onUpdateTypedWord,
       addSpaceToBossWord,
       backspaceBossWord,
       clearBossWord,
