@@ -608,50 +608,53 @@ const BossBattle = {
         </div>
 
         <!-- 拼字呈現區 (含即時逐字紅字錯誤標記) -->
-        <div class="bg-white border-2 border-purple-300 rounded-2xl p-2.5 flex items-center justify-between shadow-sm">
-          <div class="flex items-center gap-1.5 pl-2 overflow-x-auto min-h-[38px]">
-            <span class="text-xs font-bold text-gray-400 shrink-0">拼字：</span>
-            
-            <span v-if="typedWord.length === 0" class="text-xl font-black text-gray-300 tracking-wider font-mono">_____</span>
-            
-            <!-- 逐字元比對呈現：錯誤直接標紅底白字，空格清楚呈現 -->
-            <div v-else class="flex items-center gap-1">
-              <template v-for="(item, idx) in analyzedLetters" :key="idx">
-                <!-- 空白字符 -->
-                <span v-if="item.isSpace" 
-                      :class="item.isError 
-                        ? 'bg-red-500 text-white border-b-4 border-red-700' 
-                        : 'bg-purple-100 text-purple-700 border-b-4 border-purple-500'"
-                      class="px-2 py-0.5 rounded text-xs font-black shadow-inner">
-                  ␣ 空格
-                </span>
-
-                <!-- 字母字符 (答對紫色，寫錯立即紅字高亮警示) -->
-                <span v-else 
-                      :class="item.isError 
-                        ? 'bg-red-500 text-white px-2 py-0.5 rounded-lg text-2xl font-black font-mono shadow-md animate-bounce' 
-                        : 'text-2xl font-black text-purple-900 font-mono px-0.5'">
-                  {{ item.char }}
-                </span>
-              </template>
+        <!-- 拼字呈現區 (手機防擠壓自動換行設計) -->
+        <div class="bg-white border-2 border-purple-300 rounded-2xl p-3 shadow-sm space-y-2">
+          <!-- 上排：狀態提示與功能按鈕 -->
+          <div class="flex items-center justify-between pb-1.5 border-b border-purple-100">
+            <div class="flex items-center gap-1">
+              <span class="text-xs font-bold text-purple-700">拼字內容：</span>
+              <span v-if="isRecognizing" class="text-xs text-purple-500 animate-pulse font-bold">（辨識中...）</span>
             </div>
 
-            <span v-if="isRecognizing" class="text-xs text-purple-500 animate-pulse font-bold shrink-0 ml-1">（辨識中...）</span>
+            <div class="flex gap-1.5 shrink-0">
+              <button v-if="isTouchDevice" @click="$emit('add-space')" type="button" 
+                      class="bg-purple-100 hover:bg-purple-200 active:scale-90 text-purple-900 font-bold px-2.5 py-1 rounded-xl text-xs transition border border-purple-300 shadow-sm">
+                ␣ 空白
+              </button>
+              <button @click="$emit('backspace')" type="button" 
+                      class="bg-amber-100 hover:bg-amber-200 active:scale-90 text-amber-900 font-bold px-2.5 py-1 rounded-xl text-xs transition">
+                ⌫ 倒退
+              </button>
+              <button @click="$emit('clear')" type="button" 
+                      class="bg-gray-100 hover:bg-gray-200 active:scale-90 text-gray-600 font-bold px-2.5 py-1 rounded-xl text-xs transition">
+                清空
+              </button>
+            </div>
           </div>
 
-          <div class="flex gap-1.5 shrink-0 ml-2">
-            <button v-if="isTouchDevice" @click="$emit('add-space')" type="button" 
-                    class="bg-purple-100 hover:bg-purple-200 active:scale-90 text-purple-900 font-bold px-3 py-1.5 rounded-xl text-xs transition border border-purple-300 shadow-sm">
-              ␣ 空白
-            </button>
-            <button @click="$emit('backspace')" type="button" 
-                    class="bg-amber-100 hover:bg-amber-200 active:scale-90 text-amber-900 font-bold px-3 py-1.5 rounded-xl text-xs transition">
-              ⌫ 倒退
-            </button>
-            <button @click="$emit('clear')" type="button" 
-                    class="bg-gray-100 hover:bg-gray-200 active:scale-90 text-gray-600 font-bold px-3 py-1.5 rounded-xl text-xs transition">
-              清空
-            </button>
+          <!-- 下排：字母呈現區 (100% 寬度，超出版面自動往下折行) -->
+          <div class="min-h-[38px] flex flex-wrap items-center gap-1.5 pt-0.5">
+            <span v-if="typedWord.length === 0" class="text-xl font-black text-gray-300 tracking-wider font-mono">_____</span>
+            
+            <template v-else v-for="(item, idx) in analyzedLetters" :key="idx">
+              <!-- 空白字符 -->
+              <span v-if="item.isSpace" 
+                    :class="item.isError 
+                      ? 'bg-red-500 text-white border-b-4 border-red-700' 
+                      : 'bg-purple-100 text-purple-700 border-b-4 border-purple-500'"
+                    class="px-2 py-0.5 rounded text-xs font-black shadow-inner">
+                ␣ 空格
+              </span>
+
+              <!-- 字母字符 (答對紫色，寫錯立即紅字高亮) -->
+              <span v-else 
+                    :class="item.isError 
+                      ? 'bg-red-500 text-white px-2 py-0.5 rounded-lg text-2xl font-black font-mono shadow-md animate-bounce' 
+                      : 'text-2xl font-black text-purple-900 font-mono px-0.5'">
+                {{ item.char }}
+              </span>
+            </template>
           </div>
         </div>
 
