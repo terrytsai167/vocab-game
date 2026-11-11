@@ -378,7 +378,8 @@ const SpellTrial = {
   `
 };
 
-// 決戰 Boss 組件
+
+// 決戰 Boss 組件 (支援 PC 鍵盤輸入、手持手寫板、逐字錯誤紅字提示)
 const BossBattle = {
   name: 'BossBattle',
   props: [
@@ -386,15 +387,45 @@ const BossBattle = {
     'questionIndex', 'totalQuestions', 'maskedSentence', 'typedWord', 'isRecognizing',
     'lastRecognizedLetter', 'combatMsg', 'combatMsgColor', 'isShaking', 'isListening'
   ],
-  emits: ['add-space', 'backspace', 'clear', 'submit', 'voice-attack', 'restart', 'writing-start', 'writing-end'],
+  emits: ['add-space', 'backspace', 'clear', 'submit', 'voice-attack', 'restart', 'writing-start', 'writing-end', 'update-typed-word'],
   setup(props, { emit }) {
-    const { ref, onMounted, onUnmounted, nextTick, watch } = Vue;
+    const { ref, computed, onMounted, onUnmounted, nextTick, watch } = Vue;
     const hwCanvas = ref(null);
+    const pcInputRef = ref(null);
     let hwCtx = null;
     let isDrawing = false;
     let currentStroke = [];
     let strokes = [];
     let recognizeTimer = null;
+
+    // 判斷是否為觸控手持裝置 (iPad, 平板, 手機)
+    const isTouchDevice = ref(false);
+
+    const checkDeviceType = () => {
+      // 偵測裝置是否以觸控為主要輸入
+      isTouchDevice.value = window.matchMedia('(pointer: coarse)').matches || 
+                            ('ontouchstart' in window) || 
+                            (navigator.maxTouchPoints > 0);
+    };
+
+    // 逐字元即時對比比對結果 (產生綠/紫正確，紅字錯誤標記)
+    const analyzedLetters = computed(() => {
+      if (!props.question || !props.typedWord) return [];
+      const target = props.question.word.toLowerCase();
+      const input = props.typedWord.toLowerCase();
+      const result = [];
+
+      for (let i = 0; i < input.length; i++) {
+        const char = props.typedWord[i];
+        const isCorrect = (i < target.length && input[i] === target[i]);
+        result.push({
+          char: char,
+          isSpace: char === ' ',
+          isError: !isCorrect // 輸入位置與正確單字不符即為錯誤
+        });
+      }
+      return result;
+    });
 
     const getPointPos = (canvas, clientX, clientY) => {
       const rect = canvas.getBoundingClientRect();
@@ -405,7 +436,7 @@ const BossBattle = {
     };
 
     const initCanvas = () => {
-      if (!hwCanvas.value) return;
+      if (!isTouchDevice.value || !hwCanvas.value) return;
       const canvas = hwCanvas.value;
       const rect = canvas.getBoundingClientRect();
       canvas.width = Math.round(rect.width);
@@ -482,27 +513,48 @@ const BossBattle = {
         e.preventDefault();
         onEnd();
       }, { passive: false });
-
-      canvas.addEventListener('mousedown', (e) => onStart(e.clientX, e.clientY));
-      window.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
-      window.addEventListener('mouseup', () => onEnd());
     };
 
-    watch(() => props.questionIndex, () => { clearCanvas(); });
+    // PC 鍵盤輸入同步至 typedWord
+    const onPcInput = (e) => {
+      emit('update-typed-word', e.target.value);
+    };
+
+    const focusPcInput = () => {
+      if (!isTouchDevice.value && pcInputRef.value) {
+        pcInputRef.value.focus();
+      }
+    };
+
+    watch(() => props.questionIndex, () => {
+      clearCanvas();
+      nextTick(() => focusPcInput());
+    });
 
     onMounted(() => {
-      nextTick(() => initCanvas());
-      window.addEventListener('resize', initCanvas);
+      checkDeviceType();
+      nextTick(() => {
+        if (isTouchDevice.value) initCanvas();
+        else focusPcInput();
+      });
+      window.addEventListener('resize', () => {
+        checkDeviceType();
+        if (isTouchDevice.value) initCanvas();
+      });
     });
 
-    onUnmounted(() => {
-      window.removeEventListener('resize', initCanvas);
-    });
-
-    return { hwCanvas, clearCanvas };
+    return { 
+      hwCanvas, 
+      pcInputRef, 
+      clearCanvas, 
+      isTouchDevice, 
+      analyzedLetters, 
+      onPcInput 
+    };
   },
   template: `
     <div>
+      <!-- 戰鬥雙方血量條 -->
       <div class="space-y-2 mb-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
         <div>
           <div class="flex justify-between items-center text-xs sm:text-sm font-black mb-0.5 text-purple-900">
@@ -538,39 +590,86 @@ const BossBattle = {
         </div>
       </div>
 
+      <!-- 戰鬥進行中 -->
       <div v-if="gameState === 'playing' && question" class="space-y-3" :class="{ 'shake-anim': isShaking }">
         <div class="bg-purple-50 border-2 border-purple-200 rounded-2xl p-3.5 text-center shadow-inner relative">
-          <div class="text-[11px] font-black text-purple-400">第 {{ questionIndex + 1 }} 題 / 共 {{ totalQuestions }} 題</div>
+          <div class="flex justify-between items-center text-[11px] font-black text-purple-400 mb-1">
+            <span>第 {{ questionIndex + 1 }} 題 / 共 {{ totalQuestions }} 題</span>
+            <span class="bg-purple-200/80 text-purple-900 px-2 py-0.5 rounded-full">
+              {{ isTouchDevice ? '📱 手寫板模式' : '💻 實體鍵盤模式' }}
+            </span>
+          </div>
           <h2 class="text-2xl sm:text-3xl font-black text-purple-950 mt-1">{{ question.meaning }}</h2>
+          
           <div class="inline-block bg-purple-200/80 text-purple-900 px-3 py-0.5 rounded-full text-xs font-bold tracking-widest mt-1">
             提示：{{ question.hint }} (共 {{ question.word.length }} 字元)
           </div>
           <p class="text-xs text-gray-500 italic mt-1 bg-white/70 p-1.5 rounded-lg border border-purple-100">“ {{ maskedSentence }} ”</p>
         </div>
 
+        <!-- 拼字呈現區 (含即時逐字紅字錯誤標記) -->
         <div class="bg-white border-2 border-purple-300 rounded-2xl p-2.5 flex items-center justify-between shadow-sm">
           <div class="flex items-center gap-1.5 pl-2 overflow-x-auto min-h-[38px]">
             <span class="text-xs font-bold text-gray-400 shrink-0">拼字：</span>
+            
             <span v-if="typedWord.length === 0" class="text-xl font-black text-gray-300 tracking-wider font-mono">_____</span>
+            
+            <!-- 逐字元比對呈現：錯誤直接標紅底白字，空格清楚呈現 -->
             <div v-else class="flex items-center gap-1">
-              <span v-for="(char, idx) in typedWord" :key="idx"
-                    :class="char === ' ' 
-                      ? 'bg-purple-100 text-purple-700 border-b-4 border-purple-500 px-2 py-0.5 rounded text-xs font-black shadow-inner' 
-                      : 'text-2xl font-black text-purple-900 font-mono'">
-                {{ char === ' ' ? '␣ 空格' : char }}
-              </span>
+              <template v-for="(item, idx) in analyzedLetters" :key="idx">
+                <!-- 空白字符 -->
+                <span v-if="item.isSpace" 
+                      :class="item.isError 
+                        ? 'bg-red-500 text-white border-b-4 border-red-700' 
+                        : 'bg-purple-100 text-purple-700 border-b-4 border-purple-500'"
+                      class="px-2 py-0.5 rounded text-xs font-black shadow-inner">
+                  ␣ 空格
+                </span>
+
+                <!-- 字母字符 (答對紫色，寫錯立即紅字高亮警示) -->
+                <span v-else 
+                      :class="item.isError 
+                        ? 'bg-red-500 text-white px-2 py-0.5 rounded-lg text-2xl font-black font-mono shadow-md animate-bounce' 
+                        : 'text-2xl font-black text-purple-900 font-mono px-0.5'">
+                  {{ item.char }}
+                </span>
+              </template>
             </div>
+
             <span v-if="isRecognizing" class="text-xs text-purple-500 animate-pulse font-bold shrink-0 ml-1">（辨識中...）</span>
           </div>
 
           <div class="flex gap-1.5 shrink-0 ml-2">
-            <button @click="$emit('add-space')" type="button" class="bg-purple-100 hover:bg-purple-200 active:scale-90 text-purple-900 font-bold px-3 py-1.5 rounded-xl text-xs transition border border-purple-300 shadow-sm">␣ 空白</button>
-            <button @click="$emit('backspace')" type="button" class="bg-amber-100 hover:bg-amber-200 active:scale-90 text-amber-900 font-bold px-3 py-1.5 rounded-xl text-xs transition">⌫ 倒退</button>
-            <button @click="$emit('clear')" type="button" class="bg-gray-100 hover:bg-gray-200 active:scale-90 text-gray-600 font-bold px-3 py-1.5 rounded-xl text-xs transition">清空</button>
+            <button v-if="isTouchDevice" @click="$emit('add-space')" type="button" 
+                    class="bg-purple-100 hover:bg-purple-200 active:scale-90 text-purple-900 font-bold px-3 py-1.5 rounded-xl text-xs transition border border-purple-300 shadow-sm">
+              ␣ 空白
+            </button>
+            <button @click="$emit('backspace')" type="button" 
+                    class="bg-amber-100 hover:bg-amber-200 active:scale-90 text-amber-900 font-bold px-3 py-1.5 rounded-xl text-xs transition">
+              ⌫ 倒退
+            </button>
+            <button @click="$emit('clear')" type="button" 
+                    class="bg-gray-100 hover:bg-gray-200 active:scale-90 text-gray-600 font-bold px-3 py-1.5 rounded-xl text-xs transition">
+              清空
+            </button>
           </div>
         </div>
 
-        <div class="bg-purple-100/50 border-2 border-dashed border-purple-300 rounded-2xl p-2 flex flex-col items-center relative">
+        <!-- 依裝置動態切換：PC 鍵盤輸入框 vs 手持專用手寫板 -->
+        <!-- PC 模式：實體鍵盤直覺輸入框 -->
+        <div v-if="!isTouchDevice" class="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-3 text-center space-y-1">
+          <label class="text-xs font-black text-indigo-900 block">⌨️ 請使用實體鍵盤直接打字（按 Enter 鍵可直接攻擊）：</label>
+          <input ref="pcInputRef"
+                 type="text" 
+                 :value="typedWord" 
+                 @input="onPcInput"
+                 @keyup.enter="$emit('submit')"
+                 placeholder="在此輸入單字..."
+                 class="w-full text-center bg-white border-2 border-indigo-300 rounded-xl py-2 px-4 text-xl font-mono font-black text-indigo-950 outline-none focus:ring-4 focus:ring-indigo-300 shadow-inner">
+        </div>
+
+        <!-- 手持模式：保留 iPad/手機 手寫畫布 (零虛擬鍵盤推擠干擾) -->
+        <div v-else class="bg-purple-100/50 border-2 border-dashed border-purple-300 rounded-2xl p-2 flex flex-col items-center relative">
           <div class="flex justify-between w-full px-2 text-[11px] font-bold text-purple-700 mb-1">
             <span>✍️ 在此手寫字母（寫完停筆自動辨識）：</span>
             <span v-if="lastRecognizedLetter" class="text-purple-900 font-black">剛填入: {{ lastRecognizedLetter }}</span>
@@ -578,21 +677,30 @@ const BossBattle = {
           <canvas ref="hwCanvas" class="handwriting-canvas bg-white rounded-xl shadow-inner border border-purple-200 cursor-crosshair" height="140"></canvas>
         </div>
 
+        <!-- 攻擊操作按鈕 -->
         <div class="grid grid-cols-2 gap-2">
-          <button @click="$emit('submit')" class="bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-black py-3 rounded-2xl text-base shadow-md transition flex items-center justify-center gap-1">發動攻擊 ⚔️</button>
-          <button @click="$emit('voice-attack')" :class="isListening ? 'bg-red-500 animate-pulse' : 'bg-emerald-500 hover:bg-emerald-600 active:scale-95'" class="text-white font-black py-3 rounded-2xl text-sm sm:text-base shadow-md transition flex items-center justify-center gap-1">🎤 {{ isListening ? '傾聽中...' : '開口唸單字' }}</button>
+          <button @click="$emit('submit')" class="bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-black py-3 rounded-2xl text-base shadow-md transition flex items-center justify-center gap-1">
+            發動攻擊 ⚔️
+          </button>
+          <button @click="$emit('voice-attack')" :class="isListening ? 'bg-red-500 animate-pulse' : 'bg-emerald-500 hover:bg-emerald-600 active:scale-95'" class="text-white font-black py-3 rounded-2xl text-sm sm:text-base shadow-md transition flex items-center justify-center gap-1">
+            🎤 {{ isListening ? '傾聽中...' : '開口唸單字' }}
+          </button>
         </div>
 
-        <div v-if="combatMsg" class="text-center text-sm sm:text-base font-black transition" :class="combatMsgColor">{{ combatMsg }}</div>
+        <div v-if="combatMsg" class="text-center text-sm sm:text-base font-black transition" :class="combatMsgColor">
+          {{ combatMsg }}
+        </div>
       </div>
 
+      <!-- 勝利畫面 -->
       <div v-else-if="gameState === 'victory'" class="text-center py-10 space-y-3">
         <div class="text-6xl animate-bounce">👑 🏆 ⚔️</div>
         <h2 class="text-2xl sm:text-3xl font-black text-amber-500">大勝利！巨龍被你擊敗了！</h2>
-        <p class="text-gray-600 text-sm">你成功看著中文完整手寫背出所有單字與片語，獲得 10 顆星幣！</p>
+        <p class="text-gray-600 text-sm">你成功看著中文完整背出所有單字與片語，獲得 10 顆星幣！</p>
         <button @click="$emit('restart')" class="bg-green-500 hover:bg-green-600 text-white font-black px-6 py-3 rounded-2xl text-lg shadow-lg active:scale-95 transition">再次挑戰魔王 ➔</button>
       </div>
 
+      <!-- 失敗畫面 -->
       <div v-else-if="gameState === 'gameover'" class="text-center py-10 space-y-3">
         <div class="text-6xl">👻 💥</div>
         <h2 class="text-2xl sm:text-3xl font-black text-red-500">體力耗盡... 挑戰失敗！</h2>
