@@ -114,8 +114,7 @@
       @reset="resetSpelling"
       @check="checkSpelling"
     ></spell-trial>
-
-    <boss-battle 
+<boss-battle 
       v-else-if="currentMode === 'boss'"
       :game-state="bossGameState"
       :boss-hp="bossHp"
@@ -141,7 +140,9 @@
       @restart="startBossBattle"
       @writing-start="onWritingStart"
       @writing-end="onWritingEnd"
+      @update-typed-word="onUpdateTypedWord"
     ></boss-battle>
+
   </template>
 
   <!-- 學習歷程與課本指定彈跳面板 -->
