@@ -232,9 +232,23 @@ const app = createApp({
             if (Array.isArray(b)) {
               return { name: String(b[0] || `課本 ${idx + 1}`).trim(), id: String(b[1] || '').trim() };
             }
-            const bookName = b.name || b.book_name || b.title || b['書名'] || b['課本名稱'] || `課本 ${idx + 1}`;
-            const bookId = b.id || b.book_id || b.spreadsheet_id || b['ID'] || '';
-            return { name: String(bookName).trim(), id: String(bookId).trim() };
+            if (typeof b === 'object' && b !== null) {
+              const entries = Object.entries(b);
+              // 尋找 ID 欄位 (不分大小寫)
+              const idEntry = entries.find(([k]) => ['id', 'book_id', 'bookid', 'spreadsheet_id', 'sheet_id'].includes(k.toLowerCase()));
+              const bookId = idEntry ? String(idEntry[1]).trim() : '';
+
+              // 尋找書名欄位 (排除 ID 欄位，優先找常見名稱或第一個非空字串欄位)
+              const nameEntry = entries.find(([k, v]) => 
+                k !== (idEntry && idEntry[0]) && 
+                String(v).trim() !== '' &&
+                ['name', 'book_name', 'bookname', 'book', 'title', 'label', '書名', '課本', '課本名稱', '名稱'].includes(k.toLowerCase())
+              ) || entries.find(([k, v]) => k !== (idEntry && idEntry[0]) && String(v).trim() !== '');
+
+              const bookName = nameEntry ? String(nameEntry[1]).trim() : `課本 ${idx + 1}`;
+              return { name: bookName, id: bookId };
+            }
+            return { name: String(b), id: String(b) };
           }).filter(b => b.id !== '');
 
           if (visibleBookList.value.length > 0 && !selectedBookId.value) {
