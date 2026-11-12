@@ -1,3 +1,43 @@
+// ==================== 圖片轉 8-Bit 像素頭像 (自動裁切壓縮) ====================
+function convertImageToPixelAvatar(file, outputSize = 96, pixelBlockSize = 32) {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error('未選擇檔案'));
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        // 1. 計算置中正方形裁切範圍
+        const minSide = Math.min(img.width, img.height);
+        const sx = (img.width - minSide) / 2;
+        const sy = (img.height - minSide) / 2;
+
+        // 2. 第一階段：極小化畫布產生 8-Bit 馬賽克像素顆粒感 (32x32)
+        const tinyCanvas = document.createElement('canvas');
+        tinyCanvas.width = pixelBlockSize;
+        tinyCanvas.height = pixelBlockSize;
+        const tinyCtx = tinyCanvas.getContext('2d');
+        tinyCtx.drawImage(img, sx, sy, minSide, minSide, 0, 0, pixelBlockSize, pixelBlockSize);
+
+        // 3. 第二階段：關閉平滑插值，放大回目標尺寸 (96x96) 保持銳利邊緣
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = outputSize;
+        outCanvas.height = outputSize;
+        const outCtx = outCanvas.getContext('2d');
+        outCtx.imageSmoothingEnabled = false;
+        outCtx.drawImage(tinyCanvas, 0, 0, pixelBlockSize, pixelBlockSize, 0, 0, outputSize, outputSize);
+
+        // 輸出輕量 JPEG Base64 (約 2~3 KB，輕鬆存入 Google Sheets 儲存格)
+        const dataUrl = outCanvas.toDataURL('image/jpeg', 0.85);
+        resolve(dataUrl);
+      };
+      img.onerror = () => reject(new Error('圖片讀取失敗'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('檔案讀取失敗'));
+    reader.readAsDataURL(file);
+  });
+}
 // ==================== 語音與 8-Bit 晶片音效 ====================
 function playSpeech(text, rate = 1.0) {
   if (!text) return;
