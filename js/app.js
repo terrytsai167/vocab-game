@@ -95,13 +95,12 @@ const app = createApp({
       return allRawWords.value.filter(w => (w.unit ? String(w.unit).trim() : '未分類') === u).length;
     };
 
-    const maskedSentence = computed(() => {
+  const maskedSentence = computed(() => {
       if (!currentBossQuestion.value) return '';
       const s = currentBossQuestion.value.sentence || '';
       const w = currentBossQuestion.value.word || '';
-      const escaped = w.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-      const regex = new RegExp(escaped, 'gi');
-      return s.replace(regex, '______');
+      if (!w) return s;
+      return s.split(w).join('______').split(w.toLowerCase()).join('______');
     });
 
     const borderTheme = computed(() => {
