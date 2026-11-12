@@ -106,6 +106,9 @@ async function recognizeInk(strokes, width = 600, height = 140) {
 }
 
 // ==================== 學習歷程 LocalStorage 管理服務 ====================
+// ==================== 雲端 + 本機雙軌歷程管理服務 ====================
+let syncDebounceTimer = null;
+
 const StorageService = {
   getDefaultUsers() {
     return [
@@ -114,6 +117,8 @@ const StorageService = {
         name: 'Terry',
         avatar: '🧙‍♂️',
         assignedBookIds: [],
+        lastBookId: '',
+        lastUnit: 'ALL',
         stars: 0,
         studiedWords: {},
         listenAttempts: 0,
@@ -125,7 +130,7 @@ const StorageService = {
     ];
   },
 
-  loadUsers() {
+  loadLocalUsers() {
     try {
       const raw = localStorage.getItem(CONFIG.STORAGE_KEY_USERS);
       if (raw) {
@@ -133,12 +138,10 @@ const StorageService = {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) {}
-    const defaults = this.getDefaultUsers();
-    this.saveUsers(defaults);
-    return defaults;
+    return this.getDefaultUsers();
   },
 
-  saveUsers(users) {
+  saveLocalUsers(users) {
     try {
       localStorage.setItem(CONFIG.STORAGE_KEY_USERS, JSON.stringify(users));
     } catch (e) {}
@@ -151,6 +154,54 @@ const StorageService = {
   saveActiveUserId(id) {
     try {
       localStorage.setItem(CONFIG.STORAGE_KEY_ACTIVE_USER, id);
+    } catch (e) {}
+  },
+
+  // 從 Google 試算表讀取最新使用者歷程
+  async fetchCloudUsers() {
+    try {
+      const res = await fetch(`${CONFIG.GAS_URL}?action=getUsers`);
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        this.saveLocalUsers(data);
+        return data;
+      }
+    } catch (e) {
+      console.warn('雲端歷程讀取略過，使用本機快取', e);
+    }
+    return null;
+  },
+
+  // 非同步防抖動寫入雲端 (避免連續答題頻繁發送請求)
+  syncUserToCloud(userObj) {
+    if (!userObj) return;
+    clearTimeout(syncDebounceTimer);
+    syncDebounceTimer = setTimeout(async () => {
+      try {
+        await fetch(CONFIG.GAS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 避開 CORS Preflight
+          body: JSON.stringify({
+            action: 'saveUser',
+            user: userObj
+          })
+        });
+      } catch (e) {
+        console.warn('雲端歷程背景同步延遲', e);
+      }
+    }, 1200);
+  },
+
+  async deleteUserFromCloud(userId) {
+    try {
+      await fetch(CONFIG.GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'deleteUser',
+          userId: userId
+        })
+      });
     } catch (e) {}
   }
 };
