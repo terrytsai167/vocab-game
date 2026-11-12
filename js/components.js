@@ -8,8 +8,11 @@ const ProfileBar = {
   template: `
     <div class="pixel-box bg-[#1e293b] text-white px-3 sm:px-4 py-2.5 mb-3 flex flex-wrap items-center justify-between gap-2">
       <div class="flex items-center gap-2.5">
-        <div class="pixel-box-sm bg-amber-300 text-slate-900 w-10 h-10 flex items-center justify-center text-2xl">
-          {{ currentUser.avatar || '🧙‍♂️' }}
+        <div class="pixel-box-sm bg-amber-300 text-slate-900 w-10 h-10 flex items-center justify-center text-2xl overflow-hidden shrink-0">
+          <img v-if="currentUser.avatar && currentUser.avatar.startsWith('data:image')" 
+               :src="currentUser.avatar" 
+               class="w-full h-full object-cover">
+          <span v-else>{{ currentUser.avatar || '🧙‍♂️' }}</span>
         </div>
         <div>
           <div class="flex items-center gap-1.5">
@@ -26,7 +29,7 @@ const ProfileBar = {
                 @change="$emit('switch-user', $event.target.value)"
                 class="pixel-select bg-slate-800 text-amber-200 py-1 px-2 text-xs font-bold cursor-pointer">
           <option v-for="u in users" :key="u.id" :value="u.id" class="bg-slate-800 text-white">
-            {{ u.avatar }} {{ u.name }}
+            {{ (u.avatar && u.avatar.startsWith('data:image')) ? '🖼️' : u.avatar }} {{ u.name }}
           </option>
         </select>
 
@@ -141,6 +144,46 @@ const UserProfileModal = {
     }
   },
   methods: {
+    async handleAvatarUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        if (typeof play8BitSfx === 'function') play8BitSfx('click');
+        if (typeof convertImageToPixelAvatar === 'function') {
+          this.editAvatar = await convertImageToPixelAvatar(file, 96, 32);
+        } else {
+          // 內建備援：直接裁切並像素化為 96x96
+          this.editAvatar = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+              const img = new Image();
+              img.onload = () => {
+                const minSide = Math.min(img.width, img.height);
+                const sx = (img.width - minSide) / 2;
+                const sy = (img.height - minSide) / 2;
+                const tiny = document.createElement('canvas');
+                tiny.width = 32; tiny.height = 32;
+                tiny.getContext('2d').drawImage(img, sx, sy, minSide, minSide, 0, 0, 32, 32);
+                const out = document.createElement('canvas');
+                out.width = 96; out.height = 96;
+                const ctx = out.getContext('2d');
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(tiny, 0, 0, 32, 32, 0, 0, 96, 96);
+                resolve(out.toDataURL('image/jpeg', 0.85));
+              };
+              img.onerror = reject;
+              img.src = ev.target.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+        }
+        if (typeof play8BitSfx === 'function') play8BitSfx('coin');
+      } catch (err) {
+        alert('頭像轉換失敗：' + err.message);
+      }
+      e.target.value = '';
+    },
     toggleBook(bookId) {
       const idx = this.selectedBooks.indexOf(bookId);
       if (idx > -1) {
@@ -198,17 +241,29 @@ const UserProfileModal = {
         </div>
 
         <div class="pixel-box-sm mt-5 space-y-3 bg-white p-3.5">
-          <div class="text-xs font-bold text-slate-800">✏️ 目前勇者設定：</div>
-          <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-            <input v-model="editName" type="text" placeholder="小孩姓名"
-                   class="pixel-input bg-amber-50 px-3 py-1.5 text-sm font-bold flex-1 text-slate-900">
-            <div class="flex gap-1.5 overflow-x-auto py-1">
-              <span v-for="av in avatarList" :key="av" @click="editAvatar = av"
-                    :class="editAvatar === av ? 'bg-amber-300 border-2 border-slate-900 scale-110' : 'bg-slate-100 border-2 border-slate-300'"
-                    class="cursor-pointer text-lg p-1 transition">
-                {{ av }}
-              </span>
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-800">✏️ 目前勇者設定：</span>
+            <label class="pixel-btn bg-sky-400 hover:bg-sky-300 text-slate-950 font-bold px-2.5 py-1 text-xs cursor-pointer flex items-center gap-1">
+              <span>📷 上傳照片頭像</span>
+              <input type="file" accept="image/*" @change="handleAvatarUpload" class="hidden">
+            </label>
+          </div>
+
+          <div class="flex items-center gap-2.5">
+            <div class="pixel-box-sm w-12 h-12 bg-amber-200 flex items-center justify-center text-2xl overflow-hidden shrink-0">
+              <img v-if="editAvatar && editAvatar.startsWith('data:image')" :src="editAvatar" class="w-full h-full object-cover">
+              <span v-else>{{ editAvatar }}</span>
             </div>
+            <input v-model="editName" type="text" placeholder="小孩姓名"
+                   class="pixel-input bg-amber-50 px-3 py-2 text-sm font-bold flex-1 text-slate-900">
+          </div>
+
+          <div class="flex gap-1.5 overflow-x-auto py-1">
+            <span v-for="av in avatarList" :key="av" @click="editAvatar = av"
+                  :class="editAvatar === av ? 'bg-amber-300 border-2 border-slate-900 scale-110' : 'bg-slate-100 border-2 border-slate-300'"
+                  class="cursor-pointer text-lg p-1 transition shrink-0">
+              {{ av }}
+            </span>
           </div>
         </div>
 
