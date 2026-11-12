@@ -211,6 +211,7 @@ const app = createApp({
       saveUserData();
     };
 
+// 資料載入：優先秒開單字庫，背景非同步查詢多書本
     const initData = async () => {
       isLoading.value = true;
       try {
@@ -219,16 +220,28 @@ const app = createApp({
         console.error(e);
       }
 
+      // 背景默默獲取 _CONFIG_ 書本並做欄位標準化防呆
       try {
         const resBooks = await fetch(`${CONFIG.GAS_URL}?action=getBooks`);
-        const books = await resBooks.json();
-        if (Array.isArray(books) && books.length > 0) {
-          allAvailableBooks.value = books;
+        const rawBooks = await resBooks.json();
+        
+        if (Array.isArray(rawBooks) && rawBooks.length > 0) {
+          // 自動相容 name / book_name / title 或 [name, id] 陣列格式
+          allAvailableBooks.value = rawBooks.map((b, idx) => {
+            if (Array.isArray(b)) {
+              return { name: String(b[0] || `課本 ${idx + 1}`).trim(), id: String(b[1] || '').trim() };
+            }
+            const bookName = b.name || b.book_name || b.title || b['書名'] || b['課本名稱'] || `課本 ${idx + 1}`;
+            const bookId = b.id || b.book_id || b.spreadsheet_id || b['ID'] || '';
+            return { name: String(bookName).trim(), id: String(bookId).trim() };
+          }).filter(b => b.id !== ''); // 過濾掉沒有 ID 的無效資料
+
           if (visibleBookList.value.length > 0 && !selectedBookId.value) {
             selectedBookId.value = visibleBookList.value[0].id;
           }
         }
       } catch (e) {
+        console.warn('讀取多書本失敗，切換為單一預設課本', e);
         allAvailableBooks.value = [{ name: '預設單字本', id: 'default' }];
       }
     };
