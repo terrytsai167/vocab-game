@@ -99,7 +99,7 @@ const app = createApp({
       if (!currentBossQuestion.value) return '';
       const s = currentBossQuestion.value.sentence || '';
       const w = currentBossQuestion.value.word || '';
-      const escaped = w.replace(/[.*+?^${}()|[\]\]/g, '\$&');
+      const escaped = w.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
       const regex = new RegExp(escaped, 'gi');
       return s.replace(regex, '______');
     });
