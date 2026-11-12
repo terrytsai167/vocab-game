@@ -5,26 +5,92 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>字島大冒險 - 勇者試煉之路</title>
+  <title>字島大冒險 8-Bit - 勇者試煉之路</title>
   
+  <!-- 載入 8-Bit 像素中英文字體：Press Start 2P (英文) + DotGothic16 (中文點陣) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
+
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   
   <style>
+    /* 全域點陣字體與像素渲染規則 */
     html, body {
+      font-family: 'DotGothic16', monospace, sans-serif;
       overscroll-behavior-y: none;
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
       touch-action: manipulation;
+      image-rendering: pixelated;
     }
+
+    /* 英文專用復古街機字體 */
+    .pixel-en {
+      font-family: 'Press Start 2P', 'DotGothic16', monospace;
+      letter-spacing: 0.04em;
+    }
+
+    /* 8-Bit 像素森林天空背景 */
+    .pixel-forest-bg {
+      background-color: #1a472a;
+      background-image: 
+        radial-gradient(#2d6a4f 15%, transparent 16%),
+        radial-gradient(#1b4332 15%, transparent 16%),
+        linear-gradient(180deg, #38bdf8 0%, #7dd3fc 35%, #4ade80 35%, #22c55e 60%, #15803d 100%);
+      background-size: 32px 32px, 32px 32px, 100% 100%;
+      background-position: 0 0, 16px 16px, 0 0;
+    }
+
+    /* 經典 RPG 雙層像素邊框與立體陰影 */
+    .pixel-box {
+      border: 4px solid #0f172a;
+      box-shadow: 
+        inset -4px -4px 0px rgba(0, 0, 0, 0.2),
+        inset 4px 4px 0px rgba(255, 255, 255, 0.6),
+        6px 6px 0px #0f172a;
+    }
+
+    .pixel-box-sm {
+      border: 3px solid #0f172a;
+      box-shadow: 
+        inset -2px -2px 0px rgba(0, 0, 0, 0.15),
+        inset 2px 2px 0px rgba(255, 255, 255, 0.6),
+        3px 3px 0px #0f172a;
+    }
+
+    /* 8-Bit 街機立體按鈕 */
+    .pixel-btn {
+      border: 3px solid #0f172a;
+      box-shadow: 
+        inset -3px -3px 0px rgba(0, 0, 0, 0.25),
+        inset 3px 3px 0px rgba(255, 255, 255, 0.55),
+        3px 3px 0px #0f172a;
+      transition: transform 0.05s;
+    }
+    .pixel-btn:active {
+      transform: translate(3px, 3px);
+      box-shadow: 
+        inset 2px 2px 0px rgba(0, 0, 0, 0.3),
+        0px 0px 0px #0f172a;
+    }
+
+    .pixel-select, .pixel-input {
+      border: 3px solid #0f172a;
+      box-shadow: inset 2px 2px 0px rgba(0, 0, 0, 0.15);
+      border-radius: 0px;
+    }
+
     @keyframes shake {
       0%, 100% { transform: translateX(0); }
       20%, 60% { transform: translateX(-8px); }
       40%, 80% { transform: translateX(8px); }
     }
     .shake-anim { animation: shake 0.4s ease-in-out; }
+
     .handwriting-canvas {
       touch-action: none !important;
       -webkit-user-drag: none;
@@ -34,10 +100,11 @@
     }
   </style>
 </head>
-<body class="bg-slate-900 min-h-screen flex items-center justify-center p-2 sm:p-4 text-slate-800">
+<body class="pixel-forest-bg min-h-screen flex items-center justify-center p-2 sm:p-4 text-slate-900">
 
-<div id="app" class="w-full max-w-2xl bg-white rounded-3xl shadow-2xl p-5 sm:p-8 border-4" :class="borderTheme">
+<div id="app" class="pixel-box w-full max-w-2xl p-4 sm:p-7 transition-colors duration-300" :class="borderTheme">
   
+  <!-- 勇者 RPG 身分狀態列 -->
   <profile-bar 
     :current-user="currentUser" 
     :users="users"
@@ -45,8 +112,10 @@
     @open-profile-modal="showProfileModal = true"
   ></profile-bar>
 
+  <!-- 頂部四大模式切換 -->
   <nav-bar :current-mode="currentMode" :stars="stars" @set-mode="setMode"></nav-bar>
 
+  <!-- 單字本與課次雙層選單 -->
   <book-unit-selector 
     :book-list="visibleBookList"
     :selected-book-id="selectedBookId"
@@ -60,12 +129,14 @@
     @change-unit="onUnitChange"
   ></book-unit-selector>
 
-  <div v-if="isLoading" class="text-center py-16 text-gray-500 space-y-3">
-    <div class="animate-spin text-4xl">⏳</div>
-    <p class="text-base font-bold">正在讀取單字庫...</p>
-    <button @click="loadWords()" class="text-xs text-blue-500 underline pt-2">點此手動重試</button>
+  <!-- 載入中畫面 -->
+  <div v-if="isLoading" class="text-center py-16 text-slate-800 space-y-3">
+    <div class="animate-bounce text-4xl">⏳</div>
+    <p class="text-base font-bold">LOADING DATA...</p>
+    <button @click="loadWords()" class="pixel-btn bg-white px-3 py-1 text-xs font-bold mt-2">RETRY</button>
   </div>
 
+  <!-- 各關卡模式渲染 -->
   <template v-else>
     <study-mode 
       v-if="currentMode === 'study'"
@@ -138,7 +209,7 @@
     ></boss-battle>
   </template>
 
-  <!-- 學習歷程與課本指定彈跳面板 -->
+  <!-- 學習歷程與課本指定彈窗 -->
   <user-profile-modal
     :show="showProfileModal"
     :current-user="currentUser"
@@ -150,7 +221,7 @@
     @delete-user="onDeleteUser"
   ></user-profile-modal>
 
-  <!-- 單字默寫練習彈窗 (5~10次重複特訓) -->
+  <!-- 單字默寫特訓彈窗 (5~10次) -->
   <word-practice-modal
     :show="showPracticeModal"
     :word="currentWord"
@@ -161,10 +232,10 @@
 
 </div>
 
-<script src="./js/config.js?v=4"></script>
-<script src="./js/services.js?v=4"></script>
-<script src="./js/components.js?v=4"></script>
-<script src="./js/app.js?v=4"></script>
-  
+<!-- 版本號 v=8bit_1 強制穿透快取 -->
+<script src="./js/config.js?v=8bit_1"></script>
+<script src="./js/services.js?v=8bit_1"></script>
+<script src="./js/components.js?v=8bit_1"></script>
+<script src="./js/app.js?v=8bit_1"></script>
 </body>
 </html>
