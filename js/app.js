@@ -56,14 +56,14 @@ const app = createApp({
     const trialList = ref([]);
     const trialIndex = ref(0);
     const trialFeedback = ref('');
-    const trialFeedbackColor = ref('text-green-600');
+    const trialFeedbackColor = ref('text-emerald-700');
 
     const scrambledPool = ref([]);
     const spelledLetters = ref([]);
 
     const isListening = ref(false);
     const studyFeedback = ref('');
-    const studyFeedbackColor = ref('text-green-600');
+    const studyFeedbackColor = ref('text-emerald-700');
 
     const bossGameState = ref('playing');
     const bossHp = ref(100);
@@ -72,7 +72,7 @@ const app = createApp({
     let timerInterval = null;
     const isShaking = ref(false);
     const combatMsg = ref('');
-    const combatMsgColor = ref('text-green-600');
+    const combatMsgColor = ref('text-emerald-700');
     const bossQuizList = ref([]);
     const bossQuestionIndex = ref(0);
     const bossTypedWord = ref('');
@@ -95,7 +95,8 @@ const app = createApp({
       return allRawWords.value.filter(w => (w.unit ? String(w.unit).trim() : '未分類') === u).length;
     };
 
-  const maskedSentence = computed(() => {
+    // 安全無正規表達式轉義錯誤的句子遮罩
+    const maskedSentence = computed(() => {
       if (!currentBossQuestion.value) return '';
       const s = currentBossQuestion.value.sentence || '';
       const w = currentBossQuestion.value.word || '';
@@ -105,14 +106,15 @@ const app = createApp({
 
     const borderTheme = computed(() => {
       switch (currentMode.value) {
-        case 'trial_listen': return 'border-blue-400';
-        case 'trial_spell': return 'border-emerald-400';
-        case 'boss': return 'border-red-500';
-        default: return 'border-amber-300';
+        case 'trial_listen': return 'bg-[#e0f2fe]';
+        case 'trial_spell': return 'bg-[#dcfce7]';
+        case 'boss': return 'bg-[#ffe4e6]';
+        default: return 'bg-[#fef3c7]';
       }
     });
 
     const switchUser = (userId) => {
+      play8BitSfx('click');
       currentUserId.value = userId;
       StorageService.saveActiveUserId(userId);
       if (visibleBookList.value.length > 0) {
@@ -125,6 +127,7 @@ const app = createApp({
     };
 
     const onSaveUserSettings = (updated) => {
+      play8BitSfx('coin');
       const target = users.value.find(u => u.id === updated.id);
       if (target) {
         target.name = updated.name;
@@ -143,6 +146,7 @@ const app = createApp({
     };
 
     const onAddUser = (newU) => {
+      play8BitSfx('coin');
       const newId = 'user_' + Date.now();
       users.value.push({
         id: newId,
@@ -211,7 +215,7 @@ const app = createApp({
       saveUserData();
     };
 
-// 資料載入：優先秒開單字庫，背景非同步查詢多書本
+    // 載入單字與標準化多課本欄位名稱
     const initData = async () => {
       isLoading.value = true;
       try {
@@ -220,13 +224,10 @@ const app = createApp({
         console.error(e);
       }
 
-      // 背景默默獲取 _CONFIG_ 書本並做欄位標準化防呆
       try {
         const resBooks = await fetch(`${CONFIG.GAS_URL}?action=getBooks`);
         const rawBooks = await resBooks.json();
-        
         if (Array.isArray(rawBooks) && rawBooks.length > 0) {
-          // 自動相容 name / book_name / title 或 [name, id] 陣列格式
           allAvailableBooks.value = rawBooks.map((b, idx) => {
             if (Array.isArray(b)) {
               return { name: String(b[0] || `課本 ${idx + 1}`).trim(), id: String(b[1] || '').trim() };
@@ -234,14 +235,13 @@ const app = createApp({
             const bookName = b.name || b.book_name || b.title || b['書名'] || b['課本名稱'] || `課本 ${idx + 1}`;
             const bookId = b.id || b.book_id || b.spreadsheet_id || b['ID'] || '';
             return { name: String(bookName).trim(), id: String(bookId).trim() };
-          }).filter(b => b.id !== ''); // 過濾掉沒有 ID 的無效資料
+          }).filter(b => b.id !== '');
 
           if (visibleBookList.value.length > 0 && !selectedBookId.value) {
             selectedBookId.value = visibleBookList.value[0].id;
           }
         }
       } catch (e) {
-        console.warn('讀取多書本失敗，切換為單一預設課本', e);
         allAvailableBooks.value = [{ name: '預設單字本', id: 'default' }];
       }
     };
@@ -266,12 +266,14 @@ const app = createApp({
     };
 
     const onBookChange = (event) => {
+      play8BitSfx('click');
       const bookId = event && event.target ? event.target.value : event;
       selectedBookId.value = bookId;
       loadWords(bookId);
     };
 
     const onUnitChange = (event) => {
+      play8BitSfx('click');
       const unit = event && event.target ? event.target.value : event;
       if (unit) selectedUnit.value = unit;
       if (selectedUnit.value === 'ALL') {
@@ -291,11 +293,13 @@ const app = createApp({
     const speak = (text) => playSpeech(text, currentRate.value);
 
     const setRate = (r) => {
+      play8BitSfx('click');
       currentRate.value = r;
       if (currentWord.value) speak(currentWord.value.word);
     };
 
     const setMode = (mode) => {
+      play8BitSfx('click');
       currentMode.value = mode;
       clearInterval(timerInterval);
       trialFeedback.value = '';
@@ -324,8 +328,9 @@ const app = createApp({
       recordListenResult(isCorrect);
 
       if (isCorrect) {
-        trialFeedback.value = '🎉 聽得真準！太棒了！ (+1 ⭐)';
-        trialFeedbackColor.value = 'text-green-600';
+        play8BitSfx('coin');
+        trialFeedback.value = '🎉 聽得真準！ (+1 ★)';
+        trialFeedbackColor.value = 'text-emerald-700';
         speak('Great job!');
         setTimeout(() => {
           trialFeedback.value = '';
@@ -333,13 +338,15 @@ const app = createApp({
             trialIndex.value++;
             speak(currentTrialWord.value.word);
           } else {
-            trialFeedback.value = '🏆 恭喜通過本單元聽力試煉！';
+            play8BitSfx('victory');
+            trialFeedback.value = '🏆 恭喜通過聽力試煉！';
             if (window.confetti) confetti();
           }
         }, CONFIG.FEEDBACK_DELAY);
       } else {
+        play8BitSfx('hit');
         trialFeedback.value = '再仔細聽一次發音看看～';
-        trialFeedbackColor.value = 'text-orange-500';
+        trialFeedbackColor.value = 'text-rose-600';
         speak(currentTrialWord.value.word);
       }
     };
@@ -361,17 +368,20 @@ const app = createApp({
     };
 
     const pickLetter = (item) => {
+      play8BitSfx('click');
       item.used = true;
       spelledLetters.value.push(item.letter);
     };
 
     const removeLetter = (idx) => {
+      play8BitSfx('click');
       const removed = spelledLetters.value.splice(idx, 1)[0];
       const found = scrambledPool.value.find(p => p.letter === removed && p.used);
       if (found) found.used = false;
     };
 
     const resetSpelling = () => {
+      play8BitSfx('click');
       spelledLetters.value = [];
       scrambledPool.value.forEach(p => p.used = false);
     };
@@ -383,8 +393,9 @@ const app = createApp({
       recordSpellResult(isCorrect);
 
       if (isCorrect) {
-        trialFeedback.value = '🎯 拼字完全正確！ (+2 ⭐)';
-        trialFeedbackColor.value = 'text-green-600';
+        play8BitSfx('coin');
+        trialFeedback.value = '🎯 拼字完全正確！ (+2 ★)';
+        trialFeedbackColor.value = 'text-emerald-700';
         speak('Awesome!');
         setTimeout(() => {
           trialFeedback.value = '';
@@ -392,13 +403,15 @@ const app = createApp({
             trialIndex.value++;
             setupSpellingLetters();
           } else {
+            play8BitSfx('victory');
             trialFeedback.value = '🏆 恭喜通過拼字試煉！';
             if (window.confetti) confetti();
           }
         }, CONFIG.FEEDBACK_DELAY);
       } else {
+        play8BitSfx('hit');
         trialFeedback.value = '拼法不太對，再試一次看看～';
-        trialFeedbackColor.value = 'text-orange-500';
+        trialFeedbackColor.value = 'text-rose-600';
       }
     };
 
@@ -416,13 +429,15 @@ const app = createApp({
         const target = currentWord.value.word.trim().toLowerCase().replace(/[^a-z0-9 ]/g, '');
 
         if (spoken === target || spoken.includes(target)) {
+          play8BitSfx('coin');
           studyFeedback.value = '🌟 太棒了！發音非常標準！';
-          studyFeedbackColor.value = 'text-green-600';
+          studyFeedbackColor.value = 'text-emerald-700';
           speak('Awesome!');
           recordWordStudied(currentWord.value.word);
         } else {
+          play8BitSfx('hit');
           studyFeedback.value = `聽到的是 "${spoken}"，再試一次！`;
-          studyFeedbackColor.value = 'text-orange-500';
+          studyFeedbackColor.value = 'text-rose-600';
         }
       };
       recognition.onend = () => { isListening.value = false; };
@@ -430,6 +445,7 @@ const app = createApp({
     };
 
     const nextWord = () => {
+      play8BitSfx('click');
       if (currentWord.value) {
         recordWordStudied(currentWord.value.word);
       }
@@ -489,16 +505,18 @@ const app = createApp({
     const addSpaceToBossWord = () => {
       if (bossTypedWord.value.length > 0 && !bossTypedWord.value.endsWith(' ')) {
         bossTypedWord.value += ' ';
-        playClickBeep(520);
+        play8BitSfx('click');
       }
     };
 
     const backspaceBossWord = () => {
       bossTypedWord.value = bossTypedWord.value.slice(0, -1);
+      play8BitSfx('click');
     };
 
     const clearBossWord = () => {
       bossTypedWord.value = '';
+      play8BitSfx('click');
     };
 
     const startBossTimer = () => {
@@ -520,10 +538,11 @@ const app = createApp({
     };
 
     const handleBossTimeout = () => {
+      play8BitSfx('hit');
       triggerShake();
       playerHp.value = Math.max(0, playerHp.value - 20);
-      combatMsg.value = `⏰ 時間到！正確單字是 "${currentBossQuestion.value.word}"，受到反擊 -20 HP！`;
-      combatMsgColor.value = 'text-red-500';
+      combatMsg.value = `⏰ 時間到！正確單字是 "${currentBossQuestion.value.word}" (-20 HP)`;
+      combatMsgColor.value = 'text-rose-600';
       speak(currentBossQuestion.value.word);
       checkBattleStatus(false);
     };
@@ -534,18 +553,20 @@ const app = createApp({
       const target = currentBossQuestion.value.word.trim().toLowerCase().replace(/\s+/g, ' ');
 
       if (input === target) {
+        play8BitSfx('coin');
         const damage = Math.ceil(100 / bossQuizList.value.length);
         bossHp.value = Math.max(0, bossHp.value - damage);
-        combatMsg.value = `🎯 完美背對單字！對 Boss 造成 ${damage} 點重傷！`;
-        combatMsgColor.value = 'text-green-600';
+        combatMsg.value = `🎯 爆擊！對巨龍造成 ${damage} 點傷害！`;
+        combatMsgColor.value = 'text-emerald-700';
         speak('Great!');
         recordWordStudied(currentBossQuestion.value.word);
         checkBattleStatus(true);
       } else {
+        play8BitSfx('hit');
         triggerShake();
         playerHp.value = Math.max(0, playerHp.value - 15);
-        combatMsg.value = `💥 拼寫錯誤（請看上方紅字修正）！受到 Boss 衝擊 -15 HP！`;
-        combatMsgColor.value = 'text-red-500';
+        combatMsg.value = `💥 拼寫錯誤（請修正上方紅字）！受到衝擊 -15 HP！`;
+        combatMsgColor.value = 'text-rose-600';
         if (playerHp.value <= 0) checkBattleStatus(false);
       }
     };
@@ -563,16 +584,18 @@ const app = createApp({
         const target = currentBossQuestion.value.word.toLowerCase().replace(/[^a-z0-9 ]/g, '');
 
         if (spoken === target || spoken.includes(target)) {
+          play8BitSfx('coin');
           const damage = Math.ceil(100 / bossQuizList.value.length);
           bossHp.value = Math.max(0, bossHp.value - damage);
-          combatMsg.value = `🎤 口說背誦成功！發動音波重擊 ${damage} 點！`;
-          combatMsgColor.value = 'text-purple-600';
+          combatMsg.value = `🎤 音波斬擊成功！造成 ${damage} 點傷害！`;
+          combatMsgColor.value = 'text-purple-700';
           speak('Awesome!');
           recordWordStudied(currentBossQuestion.value.word);
           checkBattleStatus(true);
         } else {
+          play8BitSfx('hit');
           combatMsg.value = `聽到的是 "${spoken}"，不太對喔！`;
-          combatMsgColor.value = 'text-orange-500';
+          combatMsgColor.value = 'text-rose-600';
         }
       };
       recognition.onend = () => { isListening.value = false; };
@@ -583,6 +606,7 @@ const app = createApp({
       if (bossHp.value <= 0) {
         clearInterval(timerInterval);
         bossGameState.value = 'victory';
+        play8BitSfx('victory');
         recordBossVictory();
         if (window.confetti) {
           confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
@@ -609,6 +633,7 @@ const app = createApp({
             clearInterval(timerInterval);
             if (bossHp.value <= 25) {
               bossGameState.value = 'victory';
+              play8BitSfx('victory');
               recordBossVictory();
               if (window.confetti) confetti();
             } else {
@@ -628,77 +653,21 @@ const app = createApp({
     });
 
     return {
-      users,
-      currentUser,
-      currentUserId,
-      showProfileModal,
-      showPracticeModal,
-      switchUser,
-      onSaveUserSettings,
-      onAddUser,
-      onDeleteUser,
-      onPracticeComplete,
-      allAvailableBooks,
-      visibleBookList,
-      isLoading,
-      allRawWords,
-      wordList,
-      selectedUnit,
-      unitList,
-      selectedBookId,
-      currentIndex,
-      currentRate,
-      stars,
-      currentMode,
-      borderTheme,
-      trialList,
-      trialIndex,
-      trialFeedback,
-      trialFeedbackColor,
-      scrambledPool,
-      spelledLetters,
-      isListening,
-      studyFeedback,
-      studyFeedbackColor,
-      bossGameState,
-      bossHp,
-      playerHp,
-      timer,
-      isShaking,
-      combatMsg,
-      combatMsgColor,
-      bossQuizList,
-      bossQuestionIndex,
-      bossTypedWord,
-      currentWord,
-      currentTrialWord,
-      currentBossQuestion,
-      maskedSentence,
-      isRecognizing,
-      isWritingActive,
-      lastRecognizedLetter,
-      loadWords,
-      onBookChange,
-      onUnitChange,
-      setRate,
-      speak,
-      setMode,
-      nextWord,
-      checkListenAnswer,
-      pickLetter,
-      removeLetter,
-      resetSpelling,
-      checkSpelling,
-      startListeningStudy,
-      startBossBattle,
-      onWritingStart,
-      onWritingEnd,
-      onUpdateTypedWord,
-      addSpaceToBossWord,
-      backspaceBossWord,
-      clearBossWord,
-      submitBossAnswer,
-      startBossVoiceAttack
+      users, currentUser, currentUserId, showProfileModal, showPracticeModal,
+      switchUser, onSaveUserSettings, onAddUser, onDeleteUser, onPracticeComplete,
+      allAvailableBooks, visibleBookList, isLoading, allRawWords, wordList,
+      selectedUnit, unitList, selectedBookId, currentIndex, currentRate,
+      stars, currentMode, borderTheme, trialList, trialIndex, trialFeedback,
+      trialFeedbackColor, scrambledPool, spelledLetters, isListening,
+      studyFeedback, studyFeedbackColor, bossGameState, bossHp, playerHp,
+      timer, isShaking, combatMsg, combatMsgColor, bossQuizList,
+      bossQuestionIndex, bossTypedWord, currentWord, currentTrialWord,
+      currentBossQuestion, maskedSentence, isRecognizing, isWritingActive,
+      lastRecognizedLetter, loadWords, onBookChange, onUnitChange, setRate,
+      speak, setMode, nextWord, checkListenAnswer, pickLetter, removeLetter,
+      resetSpelling, checkSpelling, startListeningStudy, startBossBattle,
+      onWritingStart, onWritingEnd, onUpdateTypedWord, addSpaceToBossWord,
+      backspaceBossWord, clearBossWord, submitBossAnswer, startBossVoiceAttack
     };
   }
 });

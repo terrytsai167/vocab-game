@@ -1,4 +1,4 @@
-// ==================== 語音與手寫 API ====================
+// ==================== 語音與 8-Bit 晶片音效 ====================
 function playSpeech(text, rate = 1.0) {
   if (!text) return;
   window.speechSynthesis.cancel();
@@ -16,19 +16,63 @@ function playSpeech(text, rate = 1.0) {
   window.speechSynthesis.speak(utterance);
 }
 
-function playClickBeep(freq = 520) {
+// 8-Bit 紅白機方波晶片音效
+function play8BitSfx(type = 'click') {
   try {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
     osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.08);
+    gain.connect(ctx.destination);
+
+    const now = ctx.currentTime;
+
+    if (type === 'coin' || type === 'correct') {
+      // 經典吃金幣雙音 (B5 -> E6)
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(987.77, now);
+      osc.frequency.setValueAtTime(1318.51, now + 0.08);
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+      osc.start(now);
+      osc.stop(now + 0.3);
+    } else if (type === 'hit' || type === 'error') {
+      // 受擊低頻鋸齒波
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.linearRampToValueAtTime(65, now + 0.22);
+      gain.gain.setValueAtTime(0.1, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc.start(now);
+      osc.stop(now + 0.22);
+    } else if (type === 'victory') {
+      // 勝利凱旋三連音
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(523.25, now);
+      osc.frequency.setValueAtTime(659.25, now + 0.1);
+      osc.frequency.setValueAtTime(783.99, now + 0.2);
+      osc.frequency.setValueAtTime(1046.50, now + 0.3);
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+      osc.start(now);
+      osc.stop(now + 0.6);
+    } else {
+      // 預設方波按鍵聲
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(620, now);
+      gain.gain.setValueAtTime(0.06, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+      osc.start(now);
+      osc.stop(now + 0.06);
+    }
   } catch (e) {}
+}
+
+// 向下相容舊呼叫
+function playClickBeep(freq = 520) {
+  play8BitSfx('click');
 }
 
 async function recognizeInk(strokes, width = 600, height = 140) {
@@ -67,7 +111,7 @@ const StorageService = {
     return [
       {
         id: 'user_1',
-        name: '大寶',
+        name: 'Terry',
         avatar: '🧙‍♂️',
         assignedBookIds: [],
         stars: 0,
