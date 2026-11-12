@@ -1,6 +1,6 @@
 // ==================== UI 組件模組 ====================
 
-// 頂部勇者資訊列 (切換小孩、星幣、歷程按鈕)
+// 頂部勇者資訊列
 const ProfileBar = {
   name: 'ProfileBar',
   props: ['currentUser', 'users'],
@@ -21,7 +21,6 @@ const ProfileBar = {
       </div>
 
       <div class="flex items-center gap-2">
-        <!-- 使用者切換下拉 -->
         <select :value="currentUser.id" 
                 @change="$emit('switch-user', $event.target.value)"
                 class="bg-white/20 hover:bg-white/30 text-white font-bold py-1 px-2 rounded-xl text-xs outline-none cursor-pointer border border-white/30">
@@ -30,7 +29,6 @@ const ProfileBar = {
           </option>
         </select>
 
-        <!-- 歷程與課本設定按鈕 -->
         <button @click="$emit('open-profile-modal')" 
                 type="button"
                 class="bg-white text-indigo-950 hover:bg-amber-100 active:scale-95 font-black px-2.5 py-1 rounded-xl text-xs shadow transition flex items-center gap-1">
@@ -69,7 +67,7 @@ const NavBar = {
   `
 };
 
-// 書本與課次選單組件 (依使用者指定權限過濾課本)
+// 書本與課次選單組件
 const BookUnitSelector = {
   name: 'BookUnitSelector',
   props: ['bookList', 'selectedBookId', 'unitList', 'selectedUnit', 'totalWords', 'currentMode', 'currentIndex', 'currentWordCount'],
@@ -100,7 +98,7 @@ const BookUnitSelector = {
   `
 };
 
-// 學習歷程與小孩課本指定彈跳視窗 (Modal)
+// 學習歷程與小孩課本指定彈跳視窗
 const UserProfileModal = {
   name: 'UserProfileModal',
   props: ['show', 'currentUser', 'users', 'allAvailableBooks'],
@@ -171,8 +169,6 @@ const UserProfileModal = {
   template: `
     <div v-if="show" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3">
       <div class="bg-white w-full max-w-lg rounded-3xl p-5 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto border-4 border-indigo-200">
-        
-        <!-- 標題列 -->
         <div class="flex items-center justify-between pb-3 border-b border-gray-100">
           <div class="flex items-center gap-2">
             <span class="text-2xl">📜</span>
@@ -181,7 +177,6 @@ const UserProfileModal = {
           <button @click="$emit('close')" class="text-gray-400 hover:text-gray-600 text-xl font-bold p-1">✕</button>
         </div>
 
-        <!-- 1. 學習歷程數據卡片 -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 text-center">
           <div class="bg-amber-50 border border-amber-200 rounded-2xl p-2.5">
             <div class="text-xs font-bold text-amber-800">⭐ 累積星幣</div>
@@ -201,7 +196,6 @@ const UserProfileModal = {
           </div>
         </div>
 
-        <!-- 2. 小孩基本資料修改 -->
         <div class="mt-5 space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
           <div class="text-xs font-black text-slate-700">✏️ 目前使用者設定：</div>
           <div class="flex items-center gap-2">
@@ -217,7 +211,6 @@ const UserProfileModal = {
           </div>
         </div>
 
-        <!-- 3. 指定該使用者學習的課本 (多課本綁定) -->
         <div class="mt-4 space-y-2">
           <div class="flex justify-between items-center">
             <div class="text-xs font-black text-slate-800">📚 指定此勇者的學習課本：</div>
@@ -235,7 +228,6 @@ const UserProfileModal = {
           </div>
         </div>
 
-        <!-- 4. 新增另一位小孩/勇者 -->
         <div class="mt-4 pt-3 border-t border-gray-100 flex items-center gap-2">
           <input v-model="newUserName" type="text" placeholder="新增小孩 (例如: 二寶)"
                  class="bg-white border border-slate-300 rounded-xl px-3 py-1 text-xs font-bold flex-1 outline-none">
@@ -248,7 +240,6 @@ const UserProfileModal = {
           </button>
         </div>
 
-        <!-- 底部儲存確認 -->
         <div class="mt-5 flex gap-2">
           <button @click="saveCurrent" type="button" 
                   class="flex-1 bg-gradient-to-r from-amber-500 to-indigo-600 text-white font-black py-2.5 rounded-2xl text-sm shadow-md active:scale-95 transition">
@@ -259,17 +250,404 @@ const UserProfileModal = {
             刪除
           </button>
         </div>
+      </div>
+    </div>
+  `
+};
+
+// ==================== 新增：單字重複默寫練習彈窗 (5~10次) ====================
+const WordPracticeModal = {
+  name: 'WordPracticeModal',
+  props: ['show', 'word'],
+  emits: ['close', 'speak', 'practice-complete'],
+  setup(props, { emit }) {
+    const { ref, computed, watch, nextTick } = Vue;
+    const targetCount = ref(5); // 預設 5 次，可切換 5, 8, 10 次
+    const currentRep = ref(1);
+    const typedWord = ref('');
+    const isRecognizing = ref(false);
+    const isShaking = ref(false);
+    const statusMsg = ref('');
+    const statusColor = ref('text-green-600');
+    const isFinished = ref(false);
+
+    // 裝置判定
+    const isTouchDevice = ref(false);
+    const hwCanvas = ref(null);
+    const pcInputRef = ref(null);
+    let hwCtx = null;
+    let isDrawing = false;
+    let currentStroke = [];
+    let strokes = [];
+    let recognizeTimer = null;
+
+    const checkDevice = () => {
+      isTouchDevice.value = window.matchMedia('(pointer: coarse)').matches || 
+                            ('ontouchstart' in window) || 
+                            (navigator.maxTouchPoints > 0);
+    };
+
+    // 即時逐字紅字對比
+    const analyzedLetters = computed(() => {
+      if (!props.word || !typedWord.value) return [];
+      const target = props.word.word.trim().toLowerCase();
+      const input = typedWord.value.toLowerCase();
+      const result = [];
+
+      for (let i = 0; i < input.length; i++) {
+        const char = typedWord.value[i];
+        const isCorrect = (i < target.length && input[i] === target[i]);
+        result.push({
+          char: char,
+          isSpace: char === ' ',
+          isError: !isCorrect
+        });
+      }
+      return result;
+    });
+
+    const getPointPos = (canvas, clientX, clientY) => {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: Math.round(clientX - rect.left),
+        y: Math.round(clientY - rect.top)
+      };
+    };
+
+    const initCanvas = () => {
+      if (!isTouchDevice.value || !hwCanvas.value) return;
+      const canvas = hwCanvas.value;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.round(rect.width);
+      canvas.height = 135;
+
+      hwCtx = canvas.getContext('2d');
+      hwCtx.lineWidth = 4;
+      hwCtx.lineCap = 'round';
+      hwCtx.lineJoin = 'round';
+      hwCtx.strokeStyle = '#047857';
+      clearCanvas();
+      setupEvents(canvas);
+    };
+
+    const clearCanvas = () => {
+      if (!hwCtx || !hwCanvas.value) return;
+      hwCtx.clearRect(0, 0, hwCanvas.value.width, hwCanvas.value.height);
+      strokes = [];
+    };
+
+    const setupEvents = (canvas) => {
+      if (canvas._touchBound) return;
+      canvas._touchBound = true;
+
+      const onStart = (cx, cy) => {
+        isDrawing = true;
+        clearTimeout(recognizeTimer);
+        const pos = getPointPos(canvas, cx, cy);
+        currentStroke = [[pos.x], [pos.y]];
+        hwCtx.beginPath();
+        hwCtx.moveTo(pos.x, pos.y);
+      };
+
+      const onMove = (cx, cy) => {
+        if (!isDrawing) return;
+        const pos = getPointPos(canvas, cx, cy);
+        currentStroke[0].push(pos.x);
+        currentStroke[1].push(pos.y);
+        hwCtx.lineTo(pos.x, pos.y);
+        hwCtx.stroke();
+      };
+
+      const onEnd = () => {
+        if (!isDrawing) return;
+        isDrawing = false;
+        if (currentStroke.length && currentStroke[0].length) {
+          strokes.push(currentStroke);
+        }
+
+        clearTimeout(recognizeTimer);
+        recognizeTimer = setTimeout(async () => {
+          if (strokes.length > 0) {
+            isRecognizing.value = true;
+            const letter = await recognizeInk(strokes, canvas.width, canvas.height);
+            isRecognizing.value = false;
+            if (letter) {
+              typedWord.value += letter;
+            }
+          }
+          clearCanvas();
+        }, 600);
+      };
+
+      canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        onStart(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: false });
+
+      canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        onMove(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: false });
+
+      canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        onEnd();
+      }, { passive: false });
+    };
+
+    const resetPracticeState = (count = 5) => {
+      targetCount.value = count;
+      currentRep.value = 1;
+      typedWord.value = '';
+      statusMsg.value = '';
+      isFinished.value = false;
+      checkDevice();
+      nextTick(() => {
+        if (isTouchDevice.value) {
+          initCanvas();
+        } else if (pcInputRef.value) {
+          pcInputRef.value.focus();
+        }
+      });
+    };
+
+    const setTargetCount = (c) => {
+      resetPracticeState(c);
+    };
+
+    watch(() => props.show, (val) => {
+      if (val) {
+        resetPracticeState(5);
+        if (props.word) emit('speak', props.word.word);
+      }
+    });
+
+    const addSpace = () => {
+      if (typedWord.value.length > 0 && !typedWord.value.endsWith(' ')) {
+        typedWord.value += ' ';
+        playClickBeep(520);
+      }
+    };
+
+    const backspace = () => {
+      typedWord.value = typedWord.value.slice(0, -1);
+    };
+
+    const clearWord = () => {
+      typedWord.value = '';
+      clearCanvas();
+    };
+
+    const checkCurrentRep = () => {
+      if (!props.word || isFinished.value) return;
+      const input = typedWord.value.trim().toLowerCase().replace(/\s+/g, ' ');
+      const target = props.word.word.trim().toLowerCase().replace(/\s+/g, ' ');
+
+      if (input === target) {
+        statusMsg.value = `✨ 第 ${currentRep.value} 次寫對了！太棒了！`;
+        statusColor.value = 'text-emerald-600';
+        emit('speak', props.word.word);
+
+        setTimeout(() => {
+          typedWord.value = '';
+          statusMsg.value = '';
+          clearCanvas();
+
+          if (currentRep.value < targetCount.value) {
+            currentRep.value++;
+            if (!isTouchDevice.value && pcInputRef.value) {
+              pcInputRef.value.focus();
+            }
+          } else {
+            isFinished.value = true;
+            emit('practice-complete', { word: props.word.word, count: targetCount.value });
+            if (window.confetti) confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+          }
+        }, 750);
+      } else {
+        isShaking.value = true;
+        setTimeout(() => { isShaking.value = false; }, 400);
+        statusMsg.value = '❌ 有些字母寫錯囉，看上面的紅色標記修正吧！';
+        statusColor.value = 'text-red-500';
+      }
+    };
+
+    return {
+      targetCount,
+      currentRep,
+      typedWord,
+      isRecognizing,
+      isShaking,
+      statusMsg,
+      statusColor,
+      isFinished,
+      isTouchDevice,
+      hwCanvas,
+      pcInputRef,
+      analyzedLetters,
+      setTargetCount,
+      resetPracticeState,
+      addSpace,
+      backspace,
+      clearWord,
+      checkCurrentRep
+    };
+  },
+  template: `
+    <div v-if="show && word" class="fixed inset-0 bg-black/65 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4">
+      <div class="bg-white w-full max-w-lg rounded-3xl p-4 sm:p-6 shadow-2xl border-4 border-emerald-400 max-h-[95vh] overflow-y-auto"
+           :class="{ 'shake-anim': isShaking }">
+        
+        <!-- 頂部標題與關閉 -->
+        <div class="flex items-center justify-between pb-2.5 border-b border-gray-100">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">✍️</span>
+            <h2 class="text-lg sm:text-xl font-black text-emerald-950">單字背誦默寫特訓</h2>
+          </div>
+          <button @click="$emit('close')" class="text-gray-400 hover:text-gray-600 text-xl font-bold p-1">✕</button>
+        </div>
+
+        <!-- 次數選擇與進度條 -->
+        <div class="mt-3 flex flex-wrap items-center justify-between gap-2 bg-emerald-50/80 p-2.5 rounded-2xl border border-emerald-200">
+          <div class="flex items-center gap-1">
+            <span class="text-xs font-black text-emerald-900">練習次數:</span>
+            <button v-for="c in [5, 8, 10]" :key="c"
+                    @click="setTargetCount(c)"
+                    :class="targetCount === c ? 'bg-emerald-600 text-white font-black shadow' : 'bg-white text-emerald-800 border border-emerald-200'"
+                    class="px-2.5 py-1 rounded-xl text-xs font-bold transition">
+              {{ c }} 次
+            </button>
+          </div>
+          <div class="text-xs font-black text-emerald-800 bg-white px-2.5 py-1 rounded-xl border border-emerald-200">
+            進度：{{ isFinished ? targetCount : currentRep }} / {{ targetCount }} 次
+          </div>
+        </div>
+
+        <!-- 進度百分比長條 -->
+        <div class="w-full bg-gray-200 rounded-full h-2 mt-2 overflow-hidden">
+          <div class="bg-emerald-500 h-2 rounded-full transition-all duration-300" 
+               :style="{ width: ((isFinished ? targetCount : currentRep - 1) / targetCount) * 100 + '%' }"></div>
+        </div>
+
+        <!-- 默寫目標單字提示卡 (前 2 次顯示單字供描摹記憶，第 3 次起遮蔽考驗真正默寫！) -->
+        <div class="mt-3 bg-amber-50 border border-amber-200 rounded-2xl p-3 text-center">
+          <div class="flex items-center justify-center gap-2">
+            <span class="text-2xl font-black text-slate-800">{{ word.meaning }}</span>
+            <button @click="$emit('speak', word.word)" class="bg-amber-500 hover:bg-amber-600 text-white p-1.5 rounded-xl text-xs shadow">
+              🔊 聽發音
+            </button>
+          </div>
+
+          <div class="mt-1.5">
+            <span v-if="currentRep <= 2 && !isFinished" class="inline-block bg-white border border-amber-300 px-3 py-0.5 rounded-xl font-mono font-black text-lg text-blue-900 tracking-wider">
+              👀 參考拼字：{{ word.word }}
+            </span>
+            <span v-else-if="!isFinished" class="inline-block bg-amber-200/70 text-amber-950 px-3 py-0.5 rounded-full text-xs font-black">
+              🧠 進入盲寫考驗！請靠記憶默寫出單字（共 {{ word.word.length }} 字元）
+            </span>
+          </div>
+        </div>
+
+        <!-- 練習進行中區塊 -->
+        <div v-if="!isFinished" class="mt-3 space-y-3">
+          <!-- 即時對比與自動換行呈現區 -->
+          <div class="bg-white border-2 border-emerald-300 rounded-2xl p-2.5 shadow-sm space-y-2">
+            <div class="flex items-center justify-between pb-1 border-b border-emerald-100">
+              <div class="flex items-center gap-1">
+                <span class="text-xs font-bold text-emerald-700">目前拼字：</span>
+                <span v-if="isRecognizing" class="text-xs text-emerald-500 animate-pulse font-bold">（辨識中...）</span>
+              </div>
+              <div class="flex gap-1.5 shrink-0">
+                <button v-if="isTouchDevice" @click="addSpace" type="button" 
+                        class="bg-emerald-100 hover:bg-emerald-200 active:scale-90 text-emerald-900 font-bold px-2.5 py-1 rounded-xl text-xs border border-emerald-300">
+                  ␣ 空白
+                </button>
+                <button @click="backspace" type="button" 
+                        class="bg-amber-100 hover:bg-amber-200 active:scale-90 text-amber-900 font-bold px-2.5 py-1 rounded-xl text-xs">
+                  ⌫ 倒退
+                </button>
+                <button @click="clearWord" type="button" 
+                        class="bg-gray-100 hover:bg-gray-200 active:scale-90 text-gray-600 font-bold px-2.5 py-1 rounded-xl text-xs">
+                  清空
+                </button>
+              </div>
+            </div>
+
+            <!-- 逐字呈現（錯誤直接標紅底白字，支援手機自動換行） -->
+            <div class="min-h-[38px] flex flex-wrap items-center gap-1.5 pt-0.5">
+              <span v-if="typedWord.length === 0" class="text-xl font-black text-gray-300 tracking-wider font-mono">_____</span>
+              <template v-else v-for="(item, idx) in analyzedLetters" :key="idx">
+                <span v-if="item.isSpace" 
+                      :class="item.isError ? 'bg-red-500 text-white border-b-4 border-red-700' : 'bg-emerald-100 text-emerald-800 border-b-4 border-emerald-500'"
+                      class="px-2 py-0.5 rounded text-xs font-black">
+                  ␣ 空格
+                </span>
+                <span v-else 
+                      :class="item.isError ? 'bg-red-500 text-white px-2 py-0.5 rounded-lg text-2xl font-black font-mono shadow-md animate-bounce' : 'text-2xl font-black text-emerald-900 font-mono px-0.5'">
+                  {{ item.char }}
+                </span>
+              </template>
+            </div>
+          </div>
+
+          <!-- 裝置自適應輸入區域 -->
+          <!-- PC 端：實體鍵盤直覺輸入 -->
+          <div v-if="!isTouchDevice" class="bg-slate-50 border-2 border-emerald-200 rounded-2xl p-3 text-center space-y-1">
+            <label class="text-xs font-black text-emerald-900 block">💻 實體鍵盤輸入（輸入完成按 Enter 確認）：</label>
+            <input ref="pcInputRef"
+                   type="text"
+                   v-model="typedWord"
+                   @keyup.enter="checkCurrentRep"
+                   placeholder="在此輸入單字..."
+                   class="w-full text-center bg-white border-2 border-emerald-300 rounded-xl py-2 px-4 text-xl font-mono font-black text-emerald-950 outline-none focus:ring-4 focus:ring-emerald-200">
+          </div>
+
+          <!-- 手持裝置：手寫畫布 -->
+          <div v-else class="bg-emerald-50/70 border-2 border-dashed border-emerald-300 rounded-2xl p-2 flex flex-col items-center">
+            <div class="flex justify-between w-full px-2 text-[11px] font-bold text-emerald-800 mb-1">
+              <span>✍️ 在此手寫字母（寫完停筆自動辨識）：</span>
+              <span>📱 手寫模式</span>
+            </div>
+            <canvas ref="hwCanvas" class="handwriting-canvas bg-white rounded-xl shadow-inner border border-emerald-200 cursor-crosshair" height="135"></canvas>
+          </div>
+
+          <button @click="checkCurrentRep" type="button"
+                  class="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black py-3 rounded-2xl text-base shadow-md transition">
+            ✅ 確認本回合拼字 ({{ currentRep }} / {{ targetCount }})
+          </button>
+
+          <div v-if="statusMsg" class="text-center text-xs sm:text-sm font-black" :class="statusColor">
+            {{ statusMsg }}
+          </div>
+        </div>
+
+        <!-- 練習全部完成獎勵畫面 -->
+        <div v-else class="py-8 text-center space-y-3">
+          <div class="text-5xl animate-bounce">🎖️ 🌟 👏</div>
+          <h3 class="text-2xl font-black text-emerald-700">太厲害了！完成 {{ targetCount }} 次默寫特訓！</h3>
+          <p class="text-sm text-gray-600">你已經把 <b>{{ word.word }}</b> 牢牢記在腦海裡，獲得 <b>+3 ⭐</b> 星幣獎勵！</p>
+          <div class="flex gap-2 pt-2">
+            <button @click="resetPracticeState(targetCount)" type="button"
+                    class="flex-1 bg-amber-400 hover:bg-amber-500 text-amber-950 font-black py-2.5 rounded-xl text-sm shadow">
+              🔄 再練一輪
+            </button>
+            <button @click="$emit('close')" type="button"
+                    class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 rounded-xl text-sm shadow">
+              回到溫習 ➔
+            </button>
+          </div>
+        </div>
 
       </div>
     </div>
   `
 };
 
-// 單字溫習組件
+// 單字溫習組件 (新增「✍️ 默寫練習」按鈕)
 const StudyMode = {
   name: 'StudyMode',
   props: ['word', 'currentRate', 'isListening', 'feedback', 'feedbackColor'],
-  emits: ['set-rate', 'speak', 'voice-challenge', 'next'],
+  emits: ['set-rate', 'speak', 'voice-challenge', 'open-practice', 'next'],
   template: `
     <div>
       <div class="flex justify-end mb-3">
@@ -294,14 +672,20 @@ const StudyMode = {
           </div>
           <p class="text-sm text-gray-500 mt-1">{{ word.sentence_cn }}</p>
         </div>
-        <div class="grid grid-cols-2 gap-3">
-          <button @click="$emit('speak', word.word)" class="bg-blue-500 hover:bg-blue-600 active:scale-95 text-white font-bold py-3.5 rounded-xl shadow flex items-center justify-center gap-1">
-            <span>🔊 聽發音</span><span class="hidden sm:inline text-xs opacity-75">(Space)</span>
+
+        <!-- 三大功能按鈕列：聽發音 / 開口挑戰 / 默寫練習 -->
+        <div class="grid grid-cols-3 gap-2 sm:gap-3">
+          <button @click="$emit('speak', word.word)" class="bg-blue-500 hover:bg-blue-600 active:scale-95 text-white font-bold py-3.5 rounded-xl shadow flex flex-col sm:flex-row items-center justify-center gap-1 text-xs sm:text-sm">
+            <span>🔊 聽發音</span>
           </button>
-          <button @click="$emit('voice-challenge')" :class="isListening ? 'bg-red-500 animate-pulse' : 'bg-green-500 hover:bg-green-600 active:scale-95'" class="text-white font-bold py-3.5 rounded-xl shadow flex items-center justify-center gap-1">
-            <span>🎤 {{ isListening ? '傾聽中...' : '開口挑戰' }}</span><span class="hidden sm:inline text-xs opacity-75">(R)</span>
+          <button @click="$emit('voice-challenge')" :class="isListening ? 'bg-red-500 animate-pulse' : 'bg-green-500 hover:bg-green-600 active:scale-95'" class="text-white font-bold py-3.5 rounded-xl shadow flex flex-col sm:flex-row items-center justify-center gap-1 text-xs sm:text-sm">
+            <span>🎤 {{ isListening ? '傾聽中' : '開口挑戰' }}</span>
+          </button>
+          <button @click="$emit('open-practice')" class="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black py-3.5 rounded-xl shadow flex flex-col sm:flex-row items-center justify-center gap-1 text-xs sm:text-sm">
+            <span>✍️ 練習</span>
           </button>
         </div>
+
         <div v-if="feedback" class="text-lg font-black" :class="feedbackColor">{{ feedback }}</div>
         <button @click="$emit('next')" class="w-full bg-amber-400 hover:bg-amber-500 active:scale-98 py-3.5 rounded-xl font-black text-lg text-amber-950 shadow">下一題 ➔</button>
       </div>
@@ -378,8 +762,7 @@ const SpellTrial = {
   `
 };
 
-
-// 決戰 Boss 組件 (支援 PC 鍵盤輸入、手持手寫板、逐字錯誤紅字提示)
+// 決戰 Boss 組件 (支援 PC 鍵盤、手持手寫、紅字標錯、手機自動換行)
 const BossBattle = {
   name: 'BossBattle',
   props: [
@@ -389,7 +772,7 @@ const BossBattle = {
   ],
   emits: ['add-space', 'backspace', 'clear', 'submit', 'voice-attack', 'restart', 'writing-start', 'writing-end', 'update-typed-word'],
   setup(props, { emit }) {
-    const { ref, computed, onMounted, onUnmounted, nextTick, watch } = Vue;
+    const { ref, computed, onMounted, nextTick, watch } = Vue;
     const hwCanvas = ref(null);
     const pcInputRef = ref(null);
     let hwCtx = null;
@@ -398,17 +781,14 @@ const BossBattle = {
     let strokes = [];
     let recognizeTimer = null;
 
-    // 判斷是否為觸控手持裝置 (iPad, 平板, 手機)
     const isTouchDevice = ref(false);
 
     const checkDeviceType = () => {
-      // 偵測裝置是否以觸控為主要輸入
       isTouchDevice.value = window.matchMedia('(pointer: coarse)').matches || 
                             ('ontouchstart' in window) || 
                             (navigator.maxTouchPoints > 0);
     };
 
-    // 逐字元即時對比比對結果 (產生綠/紫正確，紅字錯誤標記)
     const analyzedLetters = computed(() => {
       if (!props.question || !props.typedWord) return [];
       const target = props.question.word.toLowerCase();
@@ -421,7 +801,7 @@ const BossBattle = {
         result.push({
           char: char,
           isSpace: char === ' ',
-          isError: !isCorrect // 輸入位置與正確單字不符即為錯誤
+          isError: !isCorrect
         });
       }
       return result;
@@ -515,7 +895,6 @@ const BossBattle = {
       }, { passive: false });
     };
 
-    // PC 鍵盤輸入同步至 typedWord
     const onPcInput = (e) => {
       emit('update-typed-word', e.target.value);
     };
@@ -543,18 +922,10 @@ const BossBattle = {
       });
     });
 
-    return { 
-      hwCanvas, 
-      pcInputRef, 
-      clearCanvas, 
-      isTouchDevice, 
-      analyzedLetters, 
-      onPcInput 
-    };
+    return { hwCanvas, pcInputRef, clearCanvas, isTouchDevice, analyzedLetters, onPcInput };
   },
   template: `
     <div>
-      <!-- 戰鬥雙方血量條 -->
       <div class="space-y-2 mb-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
         <div>
           <div class="flex justify-between items-center text-xs sm:text-sm font-black mb-0.5 text-purple-900">
@@ -590,7 +961,6 @@ const BossBattle = {
         </div>
       </div>
 
-      <!-- 戰鬥進行中 -->
       <div v-if="gameState === 'playing' && question" class="space-y-3" :class="{ 'shake-anim': isShaking }">
         <div class="bg-purple-50 border-2 border-purple-200 rounded-2xl p-3.5 text-center shadow-inner relative">
           <div class="flex justify-between items-center text-[11px] font-black text-purple-400 mb-1">
@@ -600,21 +970,18 @@ const BossBattle = {
             </span>
           </div>
           <h2 class="text-2xl sm:text-3xl font-black text-purple-950 mt-1">{{ question.meaning }}</h2>
-          
           <div class="inline-block bg-purple-200/80 text-purple-900 px-3 py-0.5 rounded-full text-xs font-bold tracking-widest mt-1">
             提示：{{ question.hint }} (共 {{ question.word.length }} 字元)
           </div>
           <p class="text-xs text-gray-500 italic mt-1 bg-white/70 p-1.5 rounded-lg border border-purple-100">“ {{ maskedSentence }} ”</p>
         </div>
 
-        <!-- 拼字呈現區 (含即時逐字紅字錯誤標記) -->
-        <!-- 拼字呈現區 (手機防擠壓自動換行設計) -->
+        <!-- 拼字呈現區 (手機自動換行 + 紅字錯字提示) -->
         <div class="bg-white border-2 border-purple-300 rounded-2xl p-3 shadow-sm space-y-2">
-          <!-- 上排：狀態提示與功能按鈕 -->
           <div class="flex items-center justify-between pb-1.5 border-b border-purple-100">
             <div class="flex items-center gap-1">
               <span class="text-xs font-bold text-purple-700">拼字內容：</span>
-              <span v-if="isRecognizing" class="text-xs text-purple-500 animate-pulse font-bold">（辨識中...）</span>
+              <span v-if="isRecognizing" class="text-xs text-emerald-500 animate-pulse font-bold">（辨識中...）</span>
             </div>
 
             <div class="flex gap-1.5 shrink-0">
@@ -633,33 +1000,25 @@ const BossBattle = {
             </div>
           </div>
 
-          <!-- 下排：字母呈現區 (100% 寬度，超出版面自動往下折行) -->
           <div class="min-h-[38px] flex flex-wrap items-center gap-1.5 pt-0.5">
             <span v-if="typedWord.length === 0" class="text-xl font-black text-gray-300 tracking-wider font-mono">_____</span>
             
             <template v-else v-for="(item, idx) in analyzedLetters" :key="idx">
-              <!-- 空白字符 -->
               <span v-if="item.isSpace" 
-                    :class="item.isError 
-                      ? 'bg-red-500 text-white border-b-4 border-red-700' 
-                      : 'bg-purple-100 text-purple-700 border-b-4 border-purple-500'"
+                    :class="item.isError ? 'bg-red-500 text-white border-b-4 border-red-700' : 'bg-purple-100 text-purple-700 border-b-4 border-purple-500'"
                     class="px-2 py-0.5 rounded text-xs font-black shadow-inner">
                 ␣ 空格
               </span>
 
-              <!-- 字母字符 (答對紫色，寫錯立即紅字高亮) -->
               <span v-else 
-                    :class="item.isError 
-                      ? 'bg-red-500 text-white px-2 py-0.5 rounded-lg text-2xl font-black font-mono shadow-md animate-bounce' 
-                      : 'text-2xl font-black text-purple-900 font-mono px-0.5'">
+                    :class="item.isError ? 'bg-red-500 text-white px-2 py-0.5 rounded-lg text-2xl font-black font-mono shadow-md animate-bounce' : 'text-2xl font-black text-purple-900 font-mono px-0.5'">
                 {{ item.char }}
               </span>
             </template>
           </div>
         </div>
 
-        <!-- 依裝置動態切換：PC 鍵盤輸入框 vs 手持專用手寫板 -->
-        <!-- PC 模式：實體鍵盤直覺輸入框 -->
+        <!-- PC 端實體鍵盤輸入框 -->
         <div v-if="!isTouchDevice" class="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-3 text-center space-y-1">
           <label class="text-xs font-black text-indigo-900 block">⌨️ 請使用實體鍵盤直接打字（按 Enter 鍵可直接攻擊）：</label>
           <input ref="pcInputRef"
@@ -671,7 +1030,7 @@ const BossBattle = {
                  class="w-full text-center bg-white border-2 border-indigo-300 rounded-xl py-2 px-4 text-xl font-mono font-black text-indigo-950 outline-none focus:ring-4 focus:ring-indigo-300 shadow-inner">
         </div>
 
-        <!-- 手持模式：保留 iPad/手機 手寫畫布 (零虛擬鍵盤推擠干擾) -->
+        <!-- 手持端手寫畫布 -->
         <div v-else class="bg-purple-100/50 border-2 border-dashed border-purple-300 rounded-2xl p-2 flex flex-col items-center relative">
           <div class="flex justify-between w-full px-2 text-[11px] font-bold text-purple-700 mb-1">
             <span>✍️ 在此手寫字母（寫完停筆自動辨識）：</span>
@@ -680,30 +1039,21 @@ const BossBattle = {
           <canvas ref="hwCanvas" class="handwriting-canvas bg-white rounded-xl shadow-inner border border-purple-200 cursor-crosshair" height="140"></canvas>
         </div>
 
-        <!-- 攻擊操作按鈕 -->
         <div class="grid grid-cols-2 gap-2">
-          <button @click="$emit('submit')" class="bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-black py-3 rounded-2xl text-base shadow-md transition flex items-center justify-center gap-1">
-            發動攻擊 ⚔️
-          </button>
-          <button @click="$emit('voice-attack')" :class="isListening ? 'bg-red-500 animate-pulse' : 'bg-emerald-500 hover:bg-emerald-600 active:scale-95'" class="text-white font-black py-3 rounded-2xl text-sm sm:text-base shadow-md transition flex items-center justify-center gap-1">
-            🎤 {{ isListening ? '傾聽中...' : '開口唸單字' }}
-          </button>
+          <button @click="$emit('submit')" class="bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-black py-3 rounded-2xl text-base shadow-md transition flex items-center justify-center gap-1">發動攻擊 ⚔️</button>
+          <button @click="$emit('voice-attack')" :class="isListening ? 'bg-red-500 animate-pulse' : 'bg-emerald-500 hover:bg-emerald-600 active:scale-95'" class="text-white font-black py-3 rounded-2xl text-sm sm:text-base shadow-md transition flex items-center justify-center gap-1">🎤 {{ isListening ? '傾聽中...' : '開口唸單字' }}</button>
         </div>
 
-        <div v-if="combatMsg" class="text-center text-sm sm:text-base font-black transition" :class="combatMsgColor">
-          {{ combatMsg }}
-        </div>
+        <div v-if="combatMsg" class="text-center text-sm sm:text-base font-black transition" :class="combatMsgColor">{{ combatMsg }}</div>
       </div>
 
-      <!-- 勝利畫面 -->
       <div v-else-if="gameState === 'victory'" class="text-center py-10 space-y-3">
         <div class="text-6xl animate-bounce">👑 🏆 ⚔️</div>
         <h2 class="text-2xl sm:text-3xl font-black text-amber-500">大勝利！巨龍被你擊敗了！</h2>
-        <p class="text-gray-600 text-sm">你成功看著中文完整背出所有單字與片語，獲得 10 顆星幣！</p>
+        <p class="text-gray-600 text-sm">你成功看著中文完整手寫背出所有單字與片語，獲得 10 顆星幣！</p>
         <button @click="$emit('restart')" class="bg-green-500 hover:bg-green-600 text-white font-black px-6 py-3 rounded-2xl text-lg shadow-lg active:scale-95 transition">再次挑戰魔王 ➔</button>
       </div>
 
-      <!-- 失敗畫面 -->
       <div v-else-if="gameState === 'gameover'" class="text-center py-10 space-y-3">
         <div class="text-6xl">👻 💥</div>
         <h2 class="text-2xl sm:text-3xl font-black text-red-500">體力耗盡... 挑戰失敗！</h2>

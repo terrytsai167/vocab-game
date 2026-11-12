@@ -67,17 +67,16 @@ const StorageService = {
     return [
       {
         id: 'user_1',
-        name: '小勇者 A',
+        name: '大寶',
         avatar: '🧙‍♂️',
-        assignedBookIds: [], // 空陣列表示所有課本均可看，或指定特定 book ID
+        assignedBookIds: [],
         stars: 0,
-        studiedWords: {}, // { "easier": count }
+        studiedWords: {},
         listenAttempts: 0,
         listenCorrect: 0,
         spellAttempts: 0,
         spellCorrect: 0,
-        bossVictories: 0,
-        recentLogs: []
+        bossVictories: 0
       }
     ];
   },

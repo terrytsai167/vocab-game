@@ -6,16 +6,17 @@ const app = createApp({
     NavBar,
     BookUnitSelector,
     UserProfileModal,
+    WordPracticeModal,
     StudyMode,
     ListenTrial,
     SpellTrial,
     BossBattle
   },
   setup() {
-    // 使用者歷程與狀態
     const users = ref(StorageService.loadUsers());
     const currentUserId = ref(StorageService.loadActiveUserId());
     const showProfileModal = ref(false);
+    const showPracticeModal = ref(false);
 
     const currentUser = computed(() => {
       return users.value.find(u => u.id === currentUserId.value) || users.value[0];
@@ -32,13 +33,7 @@ const app = createApp({
     const saveUserData = () => {
       StorageService.saveUsers(users.value);
     };
-    
-    // PC 鍵盤即時輸入綁定
-    const onUpdateTypedWord = (val) => {
-      bossTypedWord.value = val;
-    };
-    
-    // 書本與單字資料
+
     const allAvailableBooks = ref([]);
     const allRawWords = ref([]);
     const wordList = ref([]);
@@ -46,7 +41,6 @@ const app = createApp({
     const selectedUnit = ref('ALL');
     const isLoading = ref(true);
 
-    // 依據目前小孩「指定課本」過濾可見清單
     const visibleBookList = computed(() => {
       const assigned = currentUser.value.assignedBookIds || [];
       if (!assigned || assigned.length === 0) {
@@ -59,22 +53,18 @@ const app = createApp({
     const currentRate = ref(1.0);
     const currentMode = ref('study');
 
-    // 試煉關卡狀態
     const trialList = ref([]);
     const trialIndex = ref(0);
     const trialFeedback = ref('');
     const trialFeedbackColor = ref('text-green-600');
 
-    // 拼字狀態
     const scrambledPool = ref([]);
     const spelledLetters = ref([]);
 
-    // 語音辨識狀態
     const isListening = ref(false);
     const studyFeedback = ref('');
     const studyFeedbackColor = ref('text-green-600');
 
-    // Boss 戰狀態
     const bossGameState = ref('playing');
     const bossHp = ref(100);
     const playerHp = ref(100);
@@ -105,12 +95,11 @@ const app = createApp({
       return allRawWords.value.filter(w => (w.unit ? String(w.unit).trim() : '未分類') === u).length;
     };
 
-    // 已修復語法錯誤的句子遮罩
     const maskedSentence = computed(() => {
       if (!currentBossQuestion.value) return '';
       const s = currentBossQuestion.value.sentence || '';
       const w = currentBossQuestion.value.word || '';
-      const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escaped = w.replace(/[.*+?^${}()|[\]\]/g, '\$&');
       const regex = new RegExp(escaped, 'gi');
       return s.replace(regex, '______');
     });
@@ -124,7 +113,6 @@ const app = createApp({
       }
     });
 
-    // 切換小孩勇者
     const switchUser = (userId) => {
       currentUserId.value = userId;
       StorageService.saveActiveUserId(userId);
@@ -185,11 +173,18 @@ const app = createApp({
       }
     };
 
-    // 歷程數據累加
     const recordWordStudied = (word) => {
       if (!word) return;
       if (!currentUser.value.studiedWords) currentUser.value.studiedWords = {};
       currentUser.value.studiedWords[word] = (currentUser.value.studiedWords[word] || 0) + 1;
+      saveUserData();
+    };
+
+    const onPracticeComplete = (payload) => {
+      if (payload && payload.word) {
+        recordWordStudied(payload.word);
+      }
+      stars.value += 3;
       saveUserData();
     };
 
@@ -217,7 +212,6 @@ const app = createApp({
       saveUserData();
     };
 
-    // 資料載入
     const initData = async () => {
       isLoading.value = true;
       try {
@@ -226,7 +220,6 @@ const app = createApp({
         console.error(e);
       }
 
-      // 背景靜默讀取 _CONFIG_ 書本
       try {
         const resBooks = await fetch(`${CONFIG.GAS_URL}?action=getBooks`);
         const books = await resBooks.json();
@@ -300,7 +293,6 @@ const app = createApp({
       else if (mode === 'boss') startBossBattle();
     };
 
-    // 聽力試煉
     const initListenTrial = () => {
       if (wordList.value.length === 0) return;
       trialIndex.value = 0;
@@ -340,7 +332,6 @@ const app = createApp({
       }
     };
 
-    // 拼字試煉
     const initSpellTrial = () => {
       if (wordList.value.length === 0) return;
       trialIndex.value = 0;
@@ -399,7 +390,6 @@ const app = createApp({
       }
     };
 
-    // 溫習語音辨識
     const startListeningStudy = () => {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) return alert('此瀏覽器不支援語音辨識');
@@ -439,7 +429,6 @@ const app = createApp({
       }
     };
 
-    // Boss 戰邏輯
     const startBossBattle = () => {
       if (wordList.value.length === 0) return;
       bossHp.value = 100;
@@ -479,6 +468,10 @@ const app = createApp({
         bossTypedWord.value += letter;
         lastRecognizedLetter.value = letter;
       }
+    };
+
+    const onUpdateTypedWord = (val) => {
+      bossTypedWord.value = val;
     };
 
     const addSpaceToBossWord = () => {
@@ -539,7 +532,7 @@ const app = createApp({
       } else {
         triggerShake();
         playerHp.value = Math.max(0, playerHp.value - 15);
-        combatMsg.value = `💥 拼寫錯誤（"${input}"）！受到 Boss 衝擊 -15 HP！再試一次！`;
+        combatMsg.value = `💥 拼寫錯誤（請看上方紅字修正）！受到 Boss 衝擊 -15 HP！`;
         combatMsgColor.value = 'text-red-500';
         if (playerHp.value <= 0) checkBattleStatus(false);
       }
@@ -627,10 +620,12 @@ const app = createApp({
       currentUser,
       currentUserId,
       showProfileModal,
+      showPracticeModal,
       switchUser,
       onSaveUserSettings,
       onAddUser,
       onDeleteUser,
+      onPracticeComplete,
       allAvailableBooks,
       visibleBookList,
       isLoading,
