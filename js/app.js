@@ -13,7 +13,8 @@ const app = createApp({
     BossBattle
   },
   setup() {
-    const users = ref(StorageService.loadUsers());
+    // 1. 初始化讀取本機快取
+    const users = ref(StorageService.loadLocalUsers());
     const currentUserId = ref(StorageService.loadActiveUserId());
     const showProfileModal = ref(false);
     const showPracticeModal = ref(false);
@@ -30,8 +31,10 @@ const app = createApp({
       }
     });
 
+    // 2. 儲存本機並觸發雲端背景同步
     const saveUserData = () => {
-      StorageService.saveUsers(users.value);
+      StorageService.saveLocalUsers(users.value);
+      StorageService.syncUserToCloud(currentUser.value);
     };
 
     const allAvailableBooks = ref([]);
@@ -113,16 +116,28 @@ const app = createApp({
       }
     });
 
-    const switchUser = (userId) => {
+    // 3. 切換小孩勇者時，自動載入該小孩上次停留的課本與課次
+    const switchUser = async (userId) => {
       play8BitSfx('click');
       currentUserId.value = userId;
       StorageService.saveActiveUserId(userId);
+
+      const user = currentUser.value;
+      let targetBookId = user.lastBookId || '';
+
       if (visibleBookList.value.length > 0) {
-        const found = visibleBookList.value.find(b => b.id === selectedBookId.value);
-        if (!found) {
-          selectedBookId.value = visibleBookList.value[0].id;
-          loadWords(selectedBookId.value);
+        const isValid = visibleBookList.value.some(b => b.id === targetBookId);
+        if (!isValid) {
+          targetBookId = visibleBookList.value[0].id;
         }
+      }
+
+      if (targetBookId && targetBookId !== selectedBookId.value) {
+        selectedBookId.value = targetBookId;
+        await loadWords(targetBookId === 'default' ? '' : targetBookId, user.lastUnit || 'ALL');
+      } else {
+        selectedUnit.value = user.lastUnit || 'ALL';
+        applyUnitFilter();
       }
     };
 
@@ -139,7 +154,7 @@ const app = createApp({
           const match = visibleBookList.value.find(b => b.id === selectedBookId.value);
           if (!match) {
             selectedBookId.value = visibleBookList.value[0].id;
-            loadWords(selectedBookId.value);
+            loadWords(selectedBookId.value === 'default' ? '' : selectedBookId.value, target.lastUnit || 'ALL');
           }
         }
       }
@@ -153,6 +168,8 @@ const app = createApp({
         name: newU.name,
         avatar: newU.avatar,
         assignedBookIds: [],
+        lastBookId: '',
+        lastUnit: 'ALL',
         stars: 0,
         studiedWords: {},
         listenAttempts: 0,
@@ -170,7 +187,8 @@ const app = createApp({
       if (confirm('確定要刪除這位小勇者的學習紀錄嗎？')) {
         users.value = users.value.filter(u => u.id !== userId);
         currentUserId.value = users.value[0].id;
-        saveUserData();
+        StorageService.saveLocalUsers(users.value);
+        StorageService.deleteUserFromCloud(userId);
         switchUser(currentUserId.value);
         showProfileModal.value = false;
       }
@@ -215,60 +233,73 @@ const app = createApp({
       saveUserData();
     };
 
-    // 載入單字與標準化多課本欄位名稱
+    // 4. 網頁開啟時：同步雲端書本 + 雲端使用者紀錄 + 自動還原上次進度
     const initData = async () => {
       isLoading.value = true;
       try {
-        await loadWords();
-      } catch (e) {
-        console.error(e);
-      }
+        const [resBooks, cloudUsers] = await Promise.all([
+          fetch(`${CONFIG.GAS_URL}?action=getBooks`).then(r => r.json()).catch(() => null),
+          StorageService.fetchCloudUsers()
+        ]);
 
-      try {
-        const resBooks = await fetch(`${CONFIG.GAS_URL}?action=getBooks`);
-        const rawBooks = await resBooks.json();
-        if (Array.isArray(rawBooks) && rawBooks.length > 0) {
-          allAvailableBooks.value = rawBooks.map((b, idx) => {
-            if (Array.isArray(b)) {
-              return { name: String(b[0] || `課本 ${idx + 1}`).trim(), id: String(b[1] || '').trim() };
-            }
-            if (typeof b === 'object' && b !== null) {
-              const entries = Object.entries(b);
-              // 尋找 ID 欄位 (不分大小寫)
-              const idEntry = entries.find(([k]) => ['id', 'book_id', 'bookid', 'spreadsheet_id', 'sheet_id'].includes(k.toLowerCase()));
-              const bookId = idEntry ? String(idEntry[1]).trim() : '';
+        if (cloudUsers && cloudUsers.length > 0) {
+          users.value = cloudUsers;
+        }
 
-              // 尋找書名欄位 (排除 ID 欄位，優先找常見名稱或第一個非空字串欄位)
-              const nameEntry = entries.find(([k, v]) => 
-                k !== (idEntry && idEntry[0]) && 
-                String(v).trim() !== '' &&
-                ['name', 'book_name', 'bookname', 'book', 'title', 'label', '書名', '課本', '課本名稱', '名稱'].includes(k.toLowerCase())
-              ) || entries.find(([k, v]) => k !== (idEntry && idEntry[0]) && String(v).trim() !== '');
+        if (Array.isArray(resBooks) && resBooks.length > 0) {
+          if (resBooks[0] && typeof resBooks[0] === 'object' && 'word' in resBooks[0]) {
+            allAvailableBooks.value = [{ name: '預設單字本', id: 'default' }];
+          } else {
+            allAvailableBooks.value = resBooks.map((b, idx) => ({
+              name: String(b.name || b.book_name || b.title || `課本 ${idx + 1}`).trim(),
+              id: String(b.id || b.book_id || '').trim()
+            })).filter(b => b.id !== '');
+          }
+        } else {
+          allAvailableBooks.value = [{ name: '預設單字本', id: 'default' }];
+        }
 
-              const bookName = nameEntry ? String(nameEntry[1]).trim() : `課本 ${idx + 1}`;
-              return { name: bookName, id: bookId };
-            }
-            return { name: String(b), id: String(b) };
-          }).filter(b => b.id !== '');
+        const activeUser = currentUser.value;
+        let targetBookId = activeUser.lastBookId || '';
 
-          if (visibleBookList.value.length > 0 && !selectedBookId.value) {
-            selectedBookId.value = visibleBookList.value[0].id;
+        if (visibleBookList.value.length > 0) {
+          const isValid = visibleBookList.value.some(b => b.id === targetBookId);
+          if (!isValid) {
+            targetBookId = visibleBookList.value[0].id;
           }
         }
+
+        selectedBookId.value = targetBookId;
+        const targetUnit = activeUser.lastUnit || 'ALL';
+
+        await loadWords(targetBookId === 'default' ? '' : targetBookId, targetUnit);
+
+        if (!cloudUsers) {
+          StorageService.syncUserToCloud(activeUser);
+        }
       } catch (e) {
-        allAvailableBooks.value = [{ name: '預設單字本', id: 'default' }];
+        console.error('初始化錯誤：', e);
+        await loadWords();
       }
     };
 
-    const loadWords = async (bookId = '') => {
+    // 5. 載入指定書本並套用目標課次
+    const loadWords = async (bookId = '', targetUnit = 'ALL') => {
       isLoading.value = true;
       try {
-        const targetUrl = bookId ? `${CONFIG.GAS_URL}?action=getWords&bookId=${bookId}` : CONFIG.GAS_URL;
+        const targetUrl = (bookId && bookId !== 'default') 
+          ? `${CONFIG.GAS_URL}?action=getWords&bookId=${bookId}` 
+          : CONFIG.GAS_URL;
         const res = await fetch(targetUrl);
         const data = await res.json();
         allRawWords.value = Array.isArray(data) ? data.filter(item => item.word && String(item.word).trim() !== '') : [];
-        selectedUnit.value = 'ALL';
-        onUnitChange();
+
+        const availableUnits = Array.from(new Set(
+          allRawWords.value.map(w => w.unit ? String(w.unit).trim() : '未分類').filter(u => u !== '')
+        ));
+        selectedUnit.value = (targetUnit === 'ALL' || availableUnits.includes(targetUnit)) ? targetUnit : 'ALL';
+        
+        applyUnitFilter();
       } catch (e) {
         console.error('載入失敗：', e);
         if (allRawWords.value.length === 0) {
@@ -279,17 +310,8 @@ const app = createApp({
       }
     };
 
-    const onBookChange = (event) => {
-      play8BitSfx('click');
-      const bookId = event && event.target ? event.target.value : event;
-      selectedBookId.value = bookId;
-      loadWords(bookId);
-    };
-
-    const onUnitChange = (event) => {
-      play8BitSfx('click');
-      const unit = event && event.target ? event.target.value : event;
-      if (unit) selectedUnit.value = unit;
+    // 套用課次過濾
+    const applyUnitFilter = () => {
       if (selectedUnit.value === 'ALL') {
         wordList.value = [...allRawWords.value];
       } else {
@@ -301,6 +323,28 @@ const app = createApp({
       if (currentMode.value === 'trial_listen') initListenTrial();
       else if (currentMode.value === 'trial_spell') initSpellTrial();
       else if (currentMode.value === 'boss') startBossBattle();
+    };
+
+    // 6. 使用者手動切換課本時：記錄 lastBookId 並重置 lastUnit 為 ALL
+    const onBookChange = (event) => {
+      play8BitSfx('click');
+      const bookId = event && event.target ? event.target.value : event;
+      selectedBookId.value = bookId;
+      currentUser.value.lastBookId = bookId;
+      currentUser.value.lastUnit = 'ALL';
+      saveUserData();
+      loadWords(bookId === 'default' ? '' : bookId, 'ALL');
+    };
+
+    // 7. 使用者手動切換課次時：記錄 lastUnit 至雲端
+    const onUnitChange = (event) => {
+      play8BitSfx('click');
+      const unit = event && event.target ? event.target.value : event;
+      if (unit) selectedUnit.value = unit;
+      currentUser.value.lastBookId = selectedBookId.value;
+      currentUser.value.lastUnit = selectedUnit.value;
+      saveUserData();
+      applyUnitFilter();
     };
 
     const shuffle = (arr) => arr.sort(() => Math.random() - 0.5);
