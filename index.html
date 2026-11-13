@@ -82,6 +82,18 @@
       border-radius: 0px;
     }
 
+    /* 平板橫擺 (Landscape) 垂直空間自適應緊湊排版，避免上下按鈕被截斷 */
+    @media (orientation: landscape) and (max-height: 900px) {
+      .landscape-compact-shell {
+        padding-top: 0.75rem !important;
+        padding-bottom: 0.75rem !important;
+      }
+      .landscape-compact-card {
+        padding-top: 0.75rem !important;
+        padding-bottom: 0.75rem !important;
+      }
+    }
+
     @keyframes shake {
       0%, 100% { transform: translateX(0); }
       20%, 60% { transform: translateX(-8px); }
@@ -98,9 +110,9 @@
     }
   </style>
 </head>
-<body class="pixel-forest-bg min-h-screen flex items-center justify-center p-2 sm:p-4 text-slate-900">
+<body class="pixel-forest-bg min-h-screen overflow-y-auto flex items-start sm:items-center justify-center p-2 sm:p-4 text-slate-900">
 
-<div id="app" class="pixel-box bg-[#fffdf5] w-full max-w-2xl p-4 sm:p-7">
+<div id="app" class="pixel-box bg-[#fffdf5] w-full max-w-4xl p-4 sm:p-6 landscape-compact-shell my-auto">
   
   <!-- 勇者 RPG 身分狀態列 -->
   <profile-bar 
@@ -231,9 +243,9 @@
 </div>
 
 <!-- 版本號 v=8bit_1 強制穿透快取 -->
-<script src="./js/config.js?v=8bit_6"></script>
-<script src="./js/services.js?v=8bit_6"></script>
-<script src="./js/components.js?v=8bit_6"></script>
-<script src="./js/app.js?v=8bit_6"></script>
+<script src="./js/config.js?v=8bit_wide"></script>
+<script src="./js/services.js?v=8bit_wide"></script>
+<script src="./js/components.js?v=8bit_wide"></script>
+<script src="./js/app.js?v=8bit_wide"></script>
 </body>
 </html>
