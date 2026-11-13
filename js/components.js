@@ -579,7 +579,7 @@ const WordPracticeModal = {
           </div>
 
           <div class="mt-2">
-            <span v-if="currentRep <= (targetCount === 3 ? 1 : 2) && !isFinished" class="pixel-en inline-block bg-amber-100 border-2 border-slate-800 px-3.5 py-1 font-bold text-lg sm:text-xl text-blue-900">
+            <span v-if="currentRep <= (targetCount === 3 ? 1 : 2) && !isFinished" class="clear-word-font inline-block bg-amber-100 border-2 border-slate-800 px-4 py-1 font-extrabold text-xl sm:text-2xl text-blue-900">
               👀 {{ word.word }}
             </span>
             <span v-else-if="!isFinished" class="inline-block bg-rose-100 border-2 border-rose-600 text-rose-800 px-3 py-1 text-xs font-bold">
@@ -612,7 +612,7 @@ const WordPracticeModal = {
                 </span>
                 <span v-else 
                       :class="item.isError ? 'bg-rose-500 text-white px-1.5 py-0.5 border-2 border-slate-900 animate-bounce' : 'text-slate-900 px-0.5'"
-                      class="pixel-en text-xl sm:text-2xl font-bold">
+                      class="clear-word-font text-2xl sm:text-3xl font-extrabold">
                   {{ item.char }}
                 </span>
               </template>
@@ -705,9 +705,12 @@ const StudyMode = {
             </span>
           </div>
 
-          <div class="flex items-center justify-center gap-3">
-            <h1 class="pixel-en text-3xl sm:text-5xl font-bold text-slate-950 tracking-wide break-all">{{ word.word }}</h1>
-            <button @click="$emit('speak', word.word)" class="pixel-btn bg-sky-400 hover:bg-sky-300 text-slate-950 p-2.5 text-lg">🔊</button>
+          <div class="flex items-center justify-center gap-3 px-2">
+            <h1 :class="word.word.length > 14 ? 'text-3xl sm:text-5xl' : 'text-4xl sm:text-6xl'"
+                class="clear-word-font font-extrabold text-slate-950 break-words leading-tight">
+              {{ word.word }}
+            </h1>
+            <button @click="$emit('speak', word.word)" class="pixel-btn bg-sky-400 hover:bg-sky-300 text-slate-950 p-2.5 text-lg shrink-0">🔊</button>
           </div>
 
           <p class="text-xl sm:text-2xl font-bold text-emerald-700 mt-3">{{ word.meaning }}</p>
@@ -799,14 +802,14 @@ const SpellTrial = {
         </div>
         <div class="pixel-box-sm flex flex-wrap justify-center gap-1.5 min-h-[50px] p-2 bg-slate-200">
           <span v-for="(letter, i) in spelledLetters" :key="i" @click="$emit('remove-letter', i)"
-                class="pixel-en w-10 h-10 bg-white text-slate-950 border-2 border-slate-900 font-bold text-base flex items-center justify-center cursor-pointer">
+                class="clear-word-font w-11 h-11 bg-white text-slate-950 border-2 border-slate-900 font-extrabold text-xl flex items-center justify-center cursor-pointer">
             {{ letter === ' ' ? '␣' : letter }}
           </span>
         </div>
         <div class="flex flex-wrap justify-center gap-1.5 pt-1">
           <button v-for="(item, idx) in scrambledPool" :key="idx" :disabled="item.used" @click="$emit('pick-letter', item)"
                   :class="item.used ? 'opacity-25 cursor-not-allowed bg-slate-300' : 'pixel-btn bg-amber-300 hover:bg-amber-200 text-slate-950'"
-                  class="pixel-en w-10 h-10 font-bold text-base flex items-center justify-center">
+                  class="clear-word-font w-11 h-11 font-extrabold text-xl flex items-center justify-center">
             {{ item.letter === ' ' ? '␣' : item.letter }}
           </button>
         </div>
@@ -1072,7 +1075,7 @@ const BossBattle = {
 
               <span v-else 
                     :class="item.isError ? 'bg-rose-500 text-white px-1.5 py-0.5 border-2 border-slate-900 animate-bounce' : 'text-slate-950 px-0.5'"
-                    class="pixel-en text-xl sm:text-2xl font-bold">
+                    class="clear-word-font text-2xl sm:text-3xl font-extrabold">
                 {{ item.char }}
               </span>
             </template>
