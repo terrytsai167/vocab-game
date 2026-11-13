@@ -70,8 +70,8 @@ function playClickBeep(freq = 520) {
   play8BitSfx('click');
 }
 
-// ==================== 圖片轉 8-Bit 像素頭像 ====================
-function convertImageToPixelAvatar(file, outputSize = 96, pixelBlockSize = 32) {
+// ==================== 頭像圖片自動裁切壓縮 (清晰原圖風格) ====================
+function compressAvatarImage(file, outputSize = 128) {
   return new Promise((resolve, reject) => {
     if (!file) return reject(new Error('未選擇檔案'));
     const reader = new FileReader();
@@ -82,20 +82,15 @@ function convertImageToPixelAvatar(file, outputSize = 96, pixelBlockSize = 32) {
         const sx = (img.width - minSide) / 2;
         const sy = (img.height - minSide) / 2;
 
-        const tinyCanvas = document.createElement('canvas');
-        tinyCanvas.width = pixelBlockSize;
-        tinyCanvas.height = pixelBlockSize;
-        const tinyCtx = tinyCanvas.getContext('2d');
-        tinyCtx.drawImage(img, sx, sy, minSide, minSide, 0, 0, pixelBlockSize, pixelBlockSize);
-
         const outCanvas = document.createElement('canvas');
         outCanvas.width = outputSize;
         outCanvas.height = outputSize;
         const outCtx = outCanvas.getContext('2d');
-        outCtx.imageSmoothingEnabled = false;
-        outCtx.drawImage(tinyCanvas, 0, 0, pixelBlockSize, pixelBlockSize, 0, 0, outputSize, outputSize);
+        outCtx.imageSmoothingEnabled = true;
+        outCtx.imageSmoothingQuality = 'high';
+        outCtx.drawImage(img, sx, sy, minSide, minSide, 0, 0, outputSize, outputSize);
 
-        resolve(outCanvas.toDataURL('image/jpeg', 0.85));
+        resolve(outCanvas.toDataURL('image/jpeg', 0.82));
       };
       img.onerror = () => reject(new Error('圖片讀取失敗'));
       img.src = e.target.result;

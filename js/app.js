@@ -401,7 +401,6 @@ const app = createApp({
         play8BitSfx('coin');
         trialFeedback.value = '🎉 聽得真準！ (+1 ★)';
         trialFeedbackColor.value = 'text-emerald-700';
-        speak('Great job!');
         setTimeout(() => {
           trialFeedback.value = '';
           if (trialIndex.value < trialList.value.length - 1) {
@@ -466,7 +465,6 @@ const app = createApp({
         play8BitSfx('coin');
         trialFeedback.value = '🎯 拼字完全正確！ (+2 ★)';
         trialFeedbackColor.value = 'text-emerald-700';
-        speak('Awesome!');
         setTimeout(() => {
           trialFeedback.value = '';
           if (trialIndex.value < trialList.value.length - 1) {

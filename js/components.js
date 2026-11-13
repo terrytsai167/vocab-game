@@ -11,7 +11,7 @@ const ProfileBar = {
         <div class="pixel-box-sm bg-amber-300 text-slate-900 w-10 h-10 flex items-center justify-center text-2xl overflow-hidden shrink-0">
           <img v-if="currentUser.avatar && currentUser.avatar.startsWith('data:image')" 
                :src="currentUser.avatar" 
-               class="w-full h-full object-cover">
+               class="w-full h-full object-cover" style="image-rendering: auto;">
           <span v-else>{{ currentUser.avatar || '🧙‍♂️' }}</span>
         </div>
         <div>
@@ -149,10 +149,9 @@ const UserProfileModal = {
       if (!file) return;
       try {
         if (typeof play8BitSfx === 'function') play8BitSfx('click');
-        if (typeof convertImageToPixelAvatar === 'function') {
-          this.editAvatar = await convertImageToPixelAvatar(file, 96, 32);
+        if (typeof compressAvatarImage === 'function') {
+          this.editAvatar = await compressAvatarImage(file, 128);
         } else {
-          // 內建備援：直接裁切並像素化為 96x96
           this.editAvatar = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (ev) => {
@@ -161,15 +160,13 @@ const UserProfileModal = {
                 const minSide = Math.min(img.width, img.height);
                 const sx = (img.width - minSide) / 2;
                 const sy = (img.height - minSide) / 2;
-                const tiny = document.createElement('canvas');
-                tiny.width = 32; tiny.height = 32;
-                tiny.getContext('2d').drawImage(img, sx, sy, minSide, minSide, 0, 0, 32, 32);
                 const out = document.createElement('canvas');
-                out.width = 96; out.height = 96;
+                out.width = 128; out.height = 128;
                 const ctx = out.getContext('2d');
-                ctx.imageSmoothingEnabled = false;
-                ctx.drawImage(tiny, 0, 0, 32, 32, 0, 0, 96, 96);
-                resolve(out.toDataURL('image/jpeg', 0.85));
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, 128, 128);
+                resolve(out.toDataURL('image/jpeg', 0.82));
               };
               img.onerror = reject;
               img.src = ev.target.result;
@@ -180,7 +177,7 @@ const UserProfileModal = {
         }
         if (typeof play8BitSfx === 'function') play8BitSfx('coin');
       } catch (err) {
-        alert('頭像轉換失敗：' + err.message);
+        alert('頭像上傳失敗：' + err.message);
       }
       e.target.value = '';
     },
@@ -251,7 +248,7 @@ const UserProfileModal = {
 
           <div class="flex items-center gap-2.5">
             <div class="pixel-box-sm w-12 h-12 bg-amber-200 flex items-center justify-center text-2xl overflow-hidden shrink-0">
-              <img v-if="editAvatar && editAvatar.startsWith('data:image')" :src="editAvatar" class="w-full h-full object-cover">
+              <img v-if="editAvatar && editAvatar.startsWith('data:image')" :src="editAvatar" class="w-full h-full object-cover" style="image-rendering: auto;">
               <span v-else>{{ editAvatar }}</span>
             </div>
             <input v-model="editName" type="text" placeholder="小孩姓名"
