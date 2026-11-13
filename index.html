@@ -10,7 +10,7 @@
   <!-- 載入 8-Bit 像素中英文字體：Press Start 2P (英文) + DotGothic16 (中文點陣) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Nunito:wght@700;800;900&family=Press+Start+2P&display=swap" rel="stylesheet">
 
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -28,10 +28,16 @@
       image-rendering: pixelated;
     }
 
-    /* 英文專用復古街機字體 */
+    /* 英文專用復古街機字體 (用於分數、血條、數字等 UI 裝飾) */
     .pixel-en {
       font-family: 'Press Start 2P', 'DotGothic16', monospace;
       letter-spacing: 0.04em;
+    }
+
+    /* 兒童清晰閱讀英文字體 (圓潤無襯線，不切割單字，不因過寬折行) */
+    .clear-word-font {
+      font-family: 'Nunito', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      letter-spacing: 0.02em;
     }
 
         /* 護眼沉穩 8-Bit 復古深藍灰網格背景（不搶戲、不花俏） */
@@ -243,9 +249,9 @@
 </div>
 
 <!-- 版本號 v=8bit_1 強制穿透快取 -->
-<script src="./js/config.js?v=8bit_wide_v4"></script>
-<script src="./js/services.js?v=8bit_wide_v4"></script>
-<script src="./js/components.js?v=8bit_wide_v4"></script>
-<script src="./js/app.js?v=8bit_wide_v4"></script>
+<script src="./js/config.js?v=8bit_wide_v5"></script>
+<script src="./js/services.js?v=8bit_wide_v5"></script>
+<script src="./js/components.js?v=8bit_wide_v5"></script>
+<script src="./js/app.js?v=8bit_wide_v5"></script>
 </body>
 </html>
