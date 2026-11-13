@@ -668,11 +668,22 @@ const WordPracticeModal = {
   `
 };
 
-// 6. 單字溫習組件 (8-Bit 羊皮紙主視窗)
+// 6. 單字溫習組件 (8-Bit 羊皮紙主視窗，含詞性徽章與動詞三態/形態變化補充)
 const StudyMode = {
   name: 'StudyMode',
   props: ['word', 'currentRate', 'isListening', 'feedback', 'feedbackColor'],
   emits: ['set-rate', 'speak', 'voice-challenge', 'open-practice', 'next'],
+  methods: {
+    getPosBadgeStyle(pos) {
+      if (!pos) return 'bg-slate-200 text-slate-900';
+      const p = String(pos).toLowerCase();
+      if (p.includes('動詞') || p.includes('v.')) return 'bg-rose-300 text-slate-950';
+      if (p.includes('形容詞') || p.includes('adj')) return 'bg-sky-300 text-slate-950';
+      if (p.includes('副詞') || p.includes('adv')) return 'bg-purple-300 text-slate-950';
+      if (p.includes('名詞') || p.includes('n.')) return 'bg-amber-300 text-slate-950';
+      return 'bg-emerald-300 text-slate-950';
+    }
+  },
   template: `
     <div>
       <div class="flex justify-end mb-3">
@@ -686,11 +697,26 @@ const StudyMode = {
       <div v-if="word" class="space-y-4 text-center">
         <!-- 核心單字卡 -->
         <div class="pixel-box-sm bg-white p-4 sm:p-6 landscape-compact-card relative">
+          <!-- 詞性徽章 (支援 pos / part_of_speech / 詞性 欄位) -->
+          <div v-if="word.pos || word.part_of_speech || word['詞性']" class="mb-2">
+            <span :class="getPosBadgeStyle(word.pos || word.part_of_speech || word['詞性'])" 
+                  class="inline-block border-2 border-slate-900 px-2.5 py-0.5 text-xs sm:text-sm font-bold shadow-[2px_2px_0px_#0f172a]">
+              🏷️ {{ word.pos || word.part_of_speech || word['詞性'] }}
+            </span>
+          </div>
+
           <div class="flex items-center justify-center gap-3">
             <h1 class="pixel-en text-3xl sm:text-5xl font-bold text-slate-950 tracking-wide break-all">{{ word.word }}</h1>
             <button @click="$emit('speak', word.word)" class="pixel-btn bg-sky-400 hover:bg-sky-300 text-slate-950 p-2.5 text-lg">🔊</button>
           </div>
+
           <p class="text-xl sm:text-2xl font-bold text-emerald-700 mt-3">{{ word.meaning }}</p>
+
+          <!-- 動詞三態 / 形容詞比較級 / 複數 補充資訊卡 -->
+          <div v-if="word.grammar_note || word.tense || word['變化補充'] || word['三態']" 
+               class="mt-3 inline-block bg-amber-100/95 border-2 border-slate-800 px-3 py-1.5 text-xs sm:text-sm font-bold text-slate-900">
+            <span>📘 變化補充：{{ word.grammar_note || word.tense || word['變化補充'] || word['三態'] }}</span>
+          </div>
         </div>
 
         <!-- 例句對話框 -->
