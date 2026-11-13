@@ -250,10 +250,22 @@ const app = createApp({
           if (resBooks[0] && typeof resBooks[0] === 'object' && 'word' in resBooks[0]) {
             allAvailableBooks.value = [{ name: '預設單字本', id: 'default' }];
           } else {
-            allAvailableBooks.value = resBooks.map((b, idx) => ({
-              name: String(b.name || b.book_name || b.title || `課本 ${idx + 1}`).trim(),
-              id: String(b.id || b.book_id || '').trim()
-            })).filter(b => b.id !== '');
+            allAvailableBooks.value = resBooks.map((b, idx) => {
+              if (Array.isArray(b)) {
+                return { name: String(b[0] || `課本 ${idx + 1}`).trim(), id: String(b[1] || '').trim() };
+              }
+              if (typeof b === 'object' && b !== null) {
+                const entries = Object.entries(b);
+                const idEntry = entries.find(([k]) => ['id', 'book_id', 'bookid', 'spreadsheet_id', 'sheet_id'].includes(k.toLowerCase()));
+                const bookId = idEntry ? String(idEntry[1]).trim() : '';
+                const nameEntry = entries.find(([k, v]) => 
+                  k !== (idEntry && idEntry[0]) && String(v).trim() !== '' &&
+                  ['name', 'book_name', 'bookname', 'book', 'title', 'label', '書名', '課本', '課本名稱', '名稱'].includes(k.toLowerCase())
+                ) || entries.find(([k, v]) => k !== (idEntry && idEntry[0]) && String(v).trim() !== '');
+                return { name: nameEntry ? String(nameEntry[1]).trim() : `課本 ${idx + 1}`, id: bookId };
+              }
+              return { name: String(b), id: String(b) };
+            }).filter(b => b.id !== '');
           }
         } else {
           allAvailableBooks.value = [{ name: '預設單字本', id: 'default' }];

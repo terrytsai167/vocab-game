@@ -211,8 +211,8 @@ const UserProfileModal = {
     }
   },
   template: `
-    <div v-if="show" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-3">
-      <div class="pixel-box bg-[#fffbeb] w-full max-w-lg p-5 sm:p-6 max-h-[90vh] overflow-y-auto text-slate-900">
+    <div v-if="show" class="fixed inset-0 bg-black/75 z-50 overflow-y-auto flex items-start sm:items-center justify-center p-3">
+      <div class="pixel-box bg-[#fffbeb] w-full max-w-2xl p-5 sm:p-6 max-h-[92vh] overflow-y-auto text-slate-900 my-auto">
         <div class="flex items-center justify-between pb-3 border-b-4 border-slate-800">
           <div class="flex items-center gap-2">
             <span class="text-2xl">📜</span>
@@ -373,7 +373,8 @@ const WordPracticeModal = {
       const canvas = hwCanvas.value;
       const rect = canvas.getBoundingClientRect();
       canvas.width = Math.round(rect.width);
-      canvas.height = 240;
+      const isLandscape = window.innerWidth > window.innerHeight;
+      canvas.height = isLandscape ? 145 : 230;
 
       hwCtx = canvas.getContext('2d');
       hwCtx.lineWidth = 5;
@@ -540,8 +541,8 @@ const WordPracticeModal = {
     };
   },
   template: `
-    <div v-if="show && word" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-2 sm:p-5">
-      <div class="pixel-box bg-[#fffbeb] w-full max-w-2xl p-5 sm:p-7 max-h-[96vh] overflow-y-auto text-slate-900"
+    <div v-if="show && word" class="fixed inset-0 bg-black/75 z-50 overflow-y-auto flex items-start sm:items-center justify-center p-2 sm:p-4">
+      <div class="pixel-box bg-[#fffbeb] w-full max-w-3xl p-4 sm:p-6 max-h-[94vh] overflow-y-auto text-slate-900 my-auto"
            :class="{ 'shake-anim': isShaking }">
         
         <div class="flex items-center justify-between pb-2.5 border-b-4 border-slate-800">
@@ -687,9 +688,9 @@ const StudyMode = {
 
       <div v-if="word" class="space-y-4 text-center">
         <!-- 核心單字卡 -->
-        <div class="pixel-box-sm bg-white p-5 relative">
+        <div class="pixel-box-sm bg-white p-4 sm:p-6 landscape-compact-card relative">
           <div class="flex items-center justify-center gap-3">
-            <h1 class="pixel-en text-2xl sm:text-4xl font-bold text-slate-950 tracking-wide break-all">{{ word.word }}</h1>
+            <h1 class="pixel-en text-3xl sm:text-5xl font-bold text-slate-950 tracking-wide break-all">{{ word.word }}</h1>
             <button @click="$emit('speak', word.word)" class="pixel-btn bg-sky-400 hover:bg-sky-300 text-slate-950 p-2.5 text-lg">🔊</button>
           </div>
           <p class="text-xl sm:text-2xl font-bold text-emerald-700 mt-3">{{ word.meaning }}</p>

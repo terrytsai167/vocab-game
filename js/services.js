@@ -1,43 +1,3 @@
-// ==================== 圖片轉 8-Bit 像素頭像 (自動裁切壓縮) ====================
-function convertImageToPixelAvatar(file, outputSize = 96, pixelBlockSize = 32) {
-  return new Promise((resolve, reject) => {
-    if (!file) return reject(new Error('未選擇檔案'));
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        // 1. 計算置中正方形裁切範圍
-        const minSide = Math.min(img.width, img.height);
-        const sx = (img.width - minSide) / 2;
-        const sy = (img.height - minSide) / 2;
-
-        // 2. 第一階段：極小化畫布產生 8-Bit 馬賽克像素顆粒感 (32x32)
-        const tinyCanvas = document.createElement('canvas');
-        tinyCanvas.width = pixelBlockSize;
-        tinyCanvas.height = pixelBlockSize;
-        const tinyCtx = tinyCanvas.getContext('2d');
-        tinyCtx.drawImage(img, sx, sy, minSide, minSide, 0, 0, pixelBlockSize, pixelBlockSize);
-
-        // 3. 第二階段：關閉平滑插值，放大回目標尺寸 (96x96) 保持銳利邊緣
-        const outCanvas = document.createElement('canvas');
-        outCanvas.width = outputSize;
-        outCanvas.height = outputSize;
-        const outCtx = outCanvas.getContext('2d');
-        outCtx.imageSmoothingEnabled = false;
-        outCtx.drawImage(tinyCanvas, 0, 0, pixelBlockSize, pixelBlockSize, 0, 0, outputSize, outputSize);
-
-        // 輸出輕量 JPEG Base64 (約 2~3 KB，輕鬆存入 Google Sheets 儲存格)
-        const dataUrl = outCanvas.toDataURL('image/jpeg', 0.85);
-        resolve(dataUrl);
-      };
-      img.onerror = () => reject(new Error('圖片讀取失敗'));
-      img.src = e.target.result;
-    };
-    reader.onerror = () => reject(new Error('檔案讀取失敗'));
-    reader.readAsDataURL(file);
-  });
-}
 // ==================== 語音與 8-Bit 晶片音效 ====================
 function playSpeech(text, rate = 1.0) {
   if (!text) return;
@@ -70,7 +30,6 @@ function play8BitSfx(type = 'click') {
     const now = ctx.currentTime;
 
     if (type === 'coin' || type === 'correct') {
-      // 經典吃金幣雙音 (B5 -> E6)
       osc.type = 'square';
       osc.frequency.setValueAtTime(987.77, now);
       osc.frequency.setValueAtTime(1318.51, now + 0.08);
@@ -79,7 +38,6 @@ function play8BitSfx(type = 'click') {
       osc.start(now);
       osc.stop(now + 0.3);
     } else if (type === 'hit' || type === 'error') {
-      // 受擊低頻鋸齒波
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(180, now);
       osc.frequency.linearRampToValueAtTime(65, now + 0.22);
@@ -88,7 +46,6 @@ function play8BitSfx(type = 'click') {
       osc.start(now);
       osc.stop(now + 0.22);
     } else if (type === 'victory') {
-      // 勝利凱旋三連音
       osc.type = 'square';
       osc.frequency.setValueAtTime(523.25, now);
       osc.frequency.setValueAtTime(659.25, now + 0.1);
@@ -99,7 +56,6 @@ function play8BitSfx(type = 'click') {
       osc.start(now);
       osc.stop(now + 0.6);
     } else {
-      // 預設方波按鍵聲
       osc.type = 'square';
       osc.frequency.setValueAtTime(620, now);
       gain.gain.setValueAtTime(0.06, now);
@@ -110,11 +66,46 @@ function play8BitSfx(type = 'click') {
   } catch (e) {}
 }
 
-// 向下相容舊呼叫
 function playClickBeep(freq = 520) {
   play8BitSfx('click');
 }
 
+// ==================== 圖片轉 8-Bit 像素頭像 ====================
+function convertImageToPixelAvatar(file, outputSize = 96, pixelBlockSize = 32) {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error('未選擇檔案'));
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const minSide = Math.min(img.width, img.height);
+        const sx = (img.width - minSide) / 2;
+        const sy = (img.height - minSide) / 2;
+
+        const tinyCanvas = document.createElement('canvas');
+        tinyCanvas.width = pixelBlockSize;
+        tinyCanvas.height = pixelBlockSize;
+        const tinyCtx = tinyCanvas.getContext('2d');
+        tinyCtx.drawImage(img, sx, sy, minSide, minSide, 0, 0, pixelBlockSize, pixelBlockSize);
+
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = outputSize;
+        outCanvas.height = outputSize;
+        const outCtx = outCanvas.getContext('2d');
+        outCtx.imageSmoothingEnabled = false;
+        outCtx.drawImage(tinyCanvas, 0, 0, pixelBlockSize, pixelBlockSize, 0, 0, outputSize, outputSize);
+
+        resolve(outCanvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = () => reject(new Error('圖片讀取失敗'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('檔案讀取失敗'));
+    reader.readAsDataURL(file);
+  });
+}
+
+// ==================== Google 手寫辨識 API ====================
 async function recognizeInk(strokes, width = 600, height = 140) {
   if (!strokes || strokes.length === 0) return '';
   const payload = {
@@ -145,7 +136,6 @@ async function recognizeInk(strokes, width = 600, height = 140) {
   return '';
 }
 
-// ==================== 學習歷程 LocalStorage 管理服務 ====================
 // ==================== 雲端 + 本機雙軌歷程管理服務 ====================
 let syncDebounceTimer = null;
 
@@ -197,7 +187,6 @@ const StorageService = {
     } catch (e) {}
   },
 
-  // 從 Google 試算表讀取最新使用者歷程
   async fetchCloudUsers() {
     try {
       const res = await fetch(`${CONFIG.GAS_URL}?action=getUsers`);
@@ -212,7 +201,6 @@ const StorageService = {
     return null;
   },
 
-  // 非同步防抖動寫入雲端 (避免連續答題頻繁發送請求)
   syncUserToCloud(userObj) {
     if (!userObj) return;
     clearTimeout(syncDebounceTimer);
@@ -220,7 +208,7 @@ const StorageService = {
       try {
         await fetch(CONFIG.GAS_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 避開 CORS Preflight
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({
             action: 'saveUser',
             user: userObj
