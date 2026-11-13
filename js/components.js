@@ -318,7 +318,7 @@ const WordPracticeModal = {
   emits: ['close', 'speak', 'practice-complete'],
   setup(props, { emit }) {
     const { ref, computed, watch, nextTick } = Vue;
-    const targetCount = ref(5);
+    const targetCount = ref(3);
     const currentRep = ref(1);
     const typedWord = ref('');
     const isRecognizing = ref(false);
@@ -373,7 +373,7 @@ const WordPracticeModal = {
       const canvas = hwCanvas.value;
       const rect = canvas.getBoundingClientRect();
       canvas.width = Math.round(rect.width);
-      canvas.height = 135;
+      canvas.height = 240;
 
       hwCtx = canvas.getContext('2d');
       hwCtx.lineWidth = 5;
@@ -449,7 +449,7 @@ const WordPracticeModal = {
       }, { passive: false });
     };
 
-    const resetPracticeState = (count = 5) => {
+    const resetPracticeState = (count = 3) => {
       targetCount.value = count;
       currentRep.value = 1;
       typedWord.value = '';
@@ -472,7 +472,7 @@ const WordPracticeModal = {
 
     watch(() => props.show, (val) => {
       if (val) {
-        resetPracticeState(5);
+        resetPracticeState(3);
         if (props.word) emit('speak', props.word.word);
       }
     });
@@ -540,8 +540,8 @@ const WordPracticeModal = {
     };
   },
   template: `
-    <div v-if="show && word" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-2.5 sm:p-4">
-      <div class="pixel-box bg-[#fffbeb] w-full max-w-lg p-4 sm:p-6 max-h-[95vh] overflow-y-auto text-slate-900"
+    <div v-if="show && word" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-2 sm:p-5">
+      <div class="pixel-box bg-[#fffbeb] w-full max-w-2xl p-5 sm:p-7 max-h-[96vh] overflow-y-auto text-slate-900"
            :class="{ 'shake-anim': isShaking }">
         
         <div class="flex items-center justify-between pb-2.5 border-b-4 border-slate-800">
@@ -555,10 +555,10 @@ const WordPracticeModal = {
         <div class="pixel-box-sm mt-3 flex flex-wrap items-center justify-between gap-2 bg-[#f3e5ab] p-2.5">
           <div class="flex items-center gap-1.5">
             <span class="text-xs font-bold">次數:</span>
-            <button v-for="c in [5, 8, 10]" :key="c"
+            <button v-for="c in [3, 5]" :key="c"
                     @click="setTargetCount(c)"
                     :class="targetCount === c ? 'bg-emerald-500 text-white -translate-y-0.5' : 'bg-white text-slate-800'"
-                    class="pixel-btn px-2.5 py-1 text-xs font-bold">
+                    class="pixel-btn px-3.5 py-1.5 text-xs sm:text-sm font-bold">
               {{ c }}次
             </button>
           </div>
@@ -581,7 +581,7 @@ const WordPracticeModal = {
           </div>
 
           <div class="mt-2">
-            <span v-if="currentRep <= 2 && !isFinished" class="pixel-en inline-block bg-amber-100 border-2 border-slate-800 px-3 py-1 font-bold text-base sm:text-lg text-blue-900">
+            <span v-if="currentRep <= (targetCount === 3 ? 1 : 2) && !isFinished" class="pixel-en inline-block bg-amber-100 border-2 border-slate-800 px-3.5 py-1 font-bold text-lg sm:text-xl text-blue-900">
               👀 {{ word.word }}
             </span>
             <span v-else-if="!isFinished" class="inline-block bg-rose-100 border-2 border-rose-600 text-rose-800 px-3 py-1 text-xs font-bold">
@@ -636,7 +636,7 @@ const WordPracticeModal = {
               <span>✍️ 手寫輸入字母：</span>
               <span>📱 觸控版</span>
             </div>
-            <canvas ref="hwCanvas" class="handwriting-canvas bg-white border-2 border-slate-800 cursor-crosshair" height="135"></canvas>
+            <canvas ref="hwCanvas" class="handwriting-canvas bg-white border-2 border-slate-800 cursor-crosshair" height="240"></canvas>
           </div>
 
           <button @click="checkCurrentRep" type="button"
