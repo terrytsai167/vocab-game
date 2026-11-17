@@ -172,6 +172,11 @@ const app = createApp({
         lastUnit: 'ALL',
         stars: 0,
         studiedWords: {},
+        wrongWords: {},
+        streakDays: 0,
+        lastStudyDate: '',
+        dailyStats: {},
+        activityLogs: [],
         listenAttempts: 0,
         listenCorrect: 0,
         spellAttempts: 0,
@@ -194,6 +199,71 @@ const app = createApp({
       }
     };
 
+    const getTodayDateKey = () => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+
+    const getFormattedTimestamp = () => {
+      const d = new Date();
+      return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    };
+
+    const currentBookName = computed(() => {
+      const found = allAvailableBooks.value.find(b => b.id === selectedBookId.value);
+      return found ? found.name : '';
+    });
+
+    const todayWordCount = computed(() => {
+      const todayKey = getTodayDateKey();
+      const stats = currentUser.value.dailyStats || {};
+      return stats[todayKey] ? (stats[todayKey].count || 0) : 0;
+    });
+
+    // 記錄練習狀況明細 + 更新每日練習字數與連勝天數
+    const recordActivityLog = ({ mode, detail, result, isSuccess = true, wordDelta = 0 }) => {
+      const user = currentUser.value;
+      const todayKey = getTodayDateKey();
+
+      // 1. 更新連勝天數
+      if (user.lastStudyDate !== todayKey) {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+        if (user.lastStudyDate === yKey) {
+          user.streakDays = (user.streakDays || 0) + 1;
+        } else {
+          user.streakDays = 1;
+        }
+        user.lastStudyDate = todayKey;
+      }
+
+      // 2. 更新今日累計練習字數
+      if (wordDelta > 0) {
+        if (!user.dailyStats) user.dailyStats = {};
+        if (!user.dailyStats[todayKey]) user.dailyStats[todayKey] = { count: 0 };
+        user.dailyStats[todayKey].count += wordDelta;
+      }
+
+      // 3. 寫入近期練習狀況時間軸 (保留最新 30 筆)
+      if (!Array.isArray(user.activityLogs)) user.activityLogs = [];
+      const logEntry = {
+        time: getFormattedTimestamp(),
+        mode: mode,
+        detail: detail,
+        result: result,
+        isSuccess: isSuccess,
+        bookName: currentBookName.value
+      };
+      user.activityLogs.unshift(logEntry);
+      if (user.activityLogs.length > 30) {
+        user.activityLogs = user.activityLogs.slice(0, 30);
+      }
+
+      saveUserData();
+      StorageService.appendActivityLogToCloud(user, logEntry);
+    };
+
     const recordWordStudied = (word) => {
       if (!word) return;
       if (!currentUser.value.studiedWords) currentUser.value.studiedWords = {};
@@ -201,9 +271,102 @@ const app = createApp({
       saveUserData();
     };
 
+    // 記錄錯題與累計錯誤次數
+    const recordWrongWord = (wordObjOrText, meaningText = '') => {
+      const rawWord = typeof wordObjOrText === 'object' && wordObjOrText !== null
+        ? wordObjOrText.word
+        : wordObjOrText;
+      const wKey = String(rawWord || '').trim().toLowerCase();
+      if (!wKey) return;
+
+      const meaning = (typeof wordObjOrText === 'object' && wordObjOrText !== null)
+        ? (wordObjOrText.meaning || wordObjOrText.correctMeaning || meaningText)
+        : meaningText;
+
+      if (!currentUser.value.wrongWords) currentUser.value.wrongWords = {};
+      const existing = currentUser.value.wrongWords[wKey];
+      if (existing) {
+        existing.count = (existing.count || 1) + 1;
+        if (meaning && !existing.meaning) existing.meaning = meaning;
+        existing.lastWrongAt = Date.now();
+      } else {
+        currentUser.value.wrongWords[wKey] = {
+          word: String(rawWord).trim(),
+          meaning: meaning || '',
+          count: 1,
+          lastWrongAt: Date.now()
+        };
+      }
+      saveUserData();
+    };
+
+    // 當在默寫特訓或決戰 Boss 成功寫對時，減輕錯題權重（降為 0 即從弱點畢業）
+    const reduceWrongWord = (wordText) => {
+      const wKey = String(wordText || '').trim().toLowerCase();
+      if (!wKey || !currentUser.value.wrongWords || !currentUser.value.wrongWords[wKey]) return;
+      const nextCount = (currentUser.value.wrongWords[wKey].count || 1) - 1;
+      if (nextCount <= 0) {
+        delete currentUser.value.wrongWords[wKey];
+      } else {
+        currentUser.value.wrongWords[wKey].count = nextCount;
+      }
+      saveUserData();
+    };
+
+    const currentBookWrongWordsCount = computed(() => {
+      const wMap = currentUser.value.wrongWords || {};
+      return allRawWords.value.filter(w => {
+        const key = String(w.word || '').trim().toLowerCase();
+        return wMap[key] && (wMap[key].count || 0) > 0;
+      }).length;
+    });
+
+    const currentWordWrongCount = computed(() => {
+      if (!currentWord.value || !currentUser.value.wrongWords) return 0;
+      const key = String(currentWord.value.word || '').trim().toLowerCase();
+      return currentUser.value.wrongWords[key] ? (currentUser.value.wrongWords[key].count || 0) : 0;
+    });
+
+    const startWeaknessTraining = () => {
+      play8BitSfx('click');
+      if (currentBookWrongWordsCount.value === 0) {
+        alert('目前這本課本沒有累積錯題喔！如果錯題在其他課本，請先切換到該課本。');
+        return;
+      }
+      selectedUnit.value = 'WRONG_ONLY';
+      currentUser.value.lastBookId = selectedBookId.value;
+      currentUser.value.lastUnit = 'WRONG_ONLY';
+      saveUserData();
+      applyUnitFilter();
+    };
+
+    const clearWrongWords = () => {
+      if (confirm('確定要清空所有弱點錯題紀錄嗎？')) {
+        play8BitSfx('click');
+        currentUser.value.wrongWords = {};
+        saveUserData();
+        if (selectedUnit.value === 'WRONG_ONLY') {
+          selectedUnit.value = 'ALL';
+          applyUnitFilter();
+        }
+      }
+    };
+
+    const onPracticeError = (wordObj) => {
+      recordWrongWord(wordObj);
+    };
+
     const onPracticeComplete = (payload) => {
       if (payload && payload.word) {
         recordWordStudied(payload.word);
+        reduceWrongWord(payload.word);
+        recordActivityLog({
+          mode: '✍️ 默寫特訓',
+          detail: `${payload.word} (完成 ${payload.count || 3} 次)`,
+          result: '通過 +3★',
+          isSuccess: true,
+          wordDelta: 1
+        });
       }
       stars.value += 3;
       saveUserData();
@@ -230,6 +393,13 @@ const app = createApp({
     const recordBossVictory = () => {
       currentUser.value.bossVictories = (currentUser.value.bossVictories || 0) + 1;
       stars.value += 10;
+      recordActivityLog({
+        mode: '⚔️ 決戰 Boss',
+        detail: `擊敗暗黑巨龍 (${selectedUnit.value}，共 ${bossQuizList.value.length} 題)`,
+        result: '勝利 +10★',
+        isSuccess: true,
+        wordDelta: bossQuizList.value.length
+      });
       saveUserData();
     };
 
@@ -309,7 +479,7 @@ const app = createApp({
         const availableUnits = Array.from(new Set(
           allRawWords.value.map(w => w.unit ? String(w.unit).trim() : '未分類').filter(u => u !== '')
         ));
-        selectedUnit.value = (targetUnit === 'ALL' || availableUnits.includes(targetUnit)) ? targetUnit : 'ALL';
+        selectedUnit.value = (targetUnit === 'ALL' || targetUnit === 'WRONG_ONLY' || availableUnits.includes(targetUnit)) ? targetUnit : 'ALL';
         
         applyUnitFilter();
       } catch (e) {
@@ -322,9 +492,21 @@ const app = createApp({
       }
     };
 
-    // 套用課次過濾
+    // 套用課次過濾 (含弱點特訓錯題本)
     const applyUnitFilter = () => {
-      if (selectedUnit.value === 'ALL') {
+      if (selectedUnit.value === 'WRONG_ONLY') {
+        const wMap = currentUser.value.wrongWords || {};
+        const wrongFiltered = allRawWords.value.filter(w => {
+          const key = String(w.word || '').trim().toLowerCase();
+          return wMap[key] && (wMap[key].count || 0) > 0;
+        });
+        if (wrongFiltered.length > 0) {
+          wordList.value = wrongFiltered;
+        } else {
+          selectedUnit.value = 'ALL';
+          wordList.value = [...allRawWords.value];
+        }
+      } else if (selectedUnit.value === 'ALL') {
         wordList.value = [...allRawWords.value];
       } else {
         wordList.value = allRawWords.value.filter(w => 
@@ -409,12 +591,20 @@ const app = createApp({
           } else {
             play8BitSfx('victory');
             trialFeedback.value = '🏆 恭喜通過聽力試煉！';
+            recordActivityLog({
+              mode: '👂 聽力試煉',
+              detail: `完成 ${trialList.value.length} 題聽力測驗 (${selectedUnit.value})`,
+              result: '全數過關',
+              isSuccess: true,
+              wordDelta: trialList.value.length
+            });
             if (window.confetti) confetti();
           }
         }, CONFIG.FEEDBACK_DELAY);
       } else {
         play8BitSfx('hit');
-        trialFeedback.value = '再仔細聽一次發音看看～';
+        recordWrongWord(currentTrialWord.value.word, currentTrialWord.value.correctMeaning);
+        trialFeedback.value = '再仔細聽一次發音看看～（已加入弱點本）';
         trialFeedbackColor.value = 'text-rose-600';
         speak(currentTrialWord.value.word);
       }
@@ -473,12 +663,20 @@ const app = createApp({
           } else {
             play8BitSfx('victory');
             trialFeedback.value = '🏆 恭喜通過拼字試煉！';
+            recordActivityLog({
+              mode: '🧩 拼字試煉',
+              detail: `完成 ${trialList.value.length} 題拼字測驗 (${selectedUnit.value})`,
+              result: '全數過關',
+              isSuccess: true,
+              wordDelta: trialList.value.length
+            });
             if (window.confetti) confetti();
           }
         }, CONFIG.FEEDBACK_DELAY);
       } else {
         play8BitSfx('hit');
-        trialFeedback.value = '拼法不太對，再試一次看看～';
+        recordWrongWord(currentTrialWord.value);
+        trialFeedback.value = '拼法不太對，再試一次看看～（已加入弱點本）';
         trialFeedbackColor.value = 'text-rose-600';
       }
     };
@@ -516,6 +714,13 @@ const app = createApp({
       play8BitSfx('click');
       if (currentWord.value) {
         recordWordStudied(currentWord.value.word);
+        recordActivityLog({
+          mode: '📖 單字溫習',
+          detail: `${currentWord.value.word} (${currentWord.value.meaning || ''})`,
+          result: '已溫習',
+          isSuccess: true,
+          wordDelta: 1
+        });
       }
       studyFeedback.value = '';
       if (currentIndex.value < wordList.value.length - 1) {
@@ -608,6 +813,7 @@ const app = createApp({
     const handleBossTimeout = () => {
       play8BitSfx('hit');
       triggerShake();
+      recordWrongWord(currentBossQuestion.value);
       playerHp.value = Math.max(0, playerHp.value - 20);
       combatMsg.value = `⏰ 時間到！正確單字是 "${currentBossQuestion.value.word}" (-20 HP)`;
       combatMsgColor.value = 'text-rose-600';
@@ -628,10 +834,12 @@ const app = createApp({
         combatMsgColor.value = 'text-emerald-700';
         speak('Great!');
         recordWordStudied(currentBossQuestion.value.word);
+        reduceWrongWord(currentBossQuestion.value.word);
         checkBattleStatus(true);
       } else {
         play8BitSfx('hit');
         triggerShake();
+        recordWrongWord(currentBossQuestion.value);
         playerHp.value = Math.max(0, playerHp.value - 15);
         combatMsg.value = `💥 拼寫錯誤（請修正上方紅字）！受到衝擊 -15 HP！`;
         combatMsgColor.value = 'text-rose-600';
@@ -686,6 +894,13 @@ const app = createApp({
       if (playerHp.value <= 0) {
         clearInterval(timerInterval);
         bossGameState.value = 'gameover';
+        recordActivityLog({
+          mode: '⚔️ 決戰 Boss',
+          detail: `挑戰巨龍失敗 (${selectedUnit.value}，第 ${bossQuestionIndex.value + 1} 題)`,
+          result: '挑戰失敗',
+          isSuccess: false,
+          wordDelta: 0
+        });
         speak('Game over! Try again!');
         return;
       }
@@ -721,8 +936,9 @@ const app = createApp({
     });
 
     return {
-      users, currentUser, currentUserId, showProfileModal, showPracticeModal,
-      switchUser, onSaveUserSettings, onAddUser, onDeleteUser, onPracticeComplete,
+      users, currentUser, currentUserId, todayWordCount, showProfileModal, showPracticeModal,
+      switchUser, onSaveUserSettings, onAddUser, onDeleteUser, onPracticeComplete, onPracticeError,
+      currentBookWrongWordsCount, currentWordWrongCount, startWeaknessTraining, clearWrongWords,
       allAvailableBooks, visibleBookList, isLoading, allRawWords, wordList,
       selectedUnit, unitList, selectedBookId, currentIndex, currentRate,
       stars, currentMode, borderTheme, trialList, trialIndex, trialFeedback,

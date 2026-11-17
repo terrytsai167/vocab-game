@@ -146,6 +146,11 @@ const StorageService = {
         lastUnit: 'ALL',
         stars: 0,
         studiedWords: {},
+        wrongWords: {},
+        streakDays: 0,
+        lastStudyDate: '',
+        dailyStats: {},
+        activityLogs: [],
         listenAttempts: 0,
         listenCorrect: 0,
         spellAttempts: 0,
@@ -213,6 +218,23 @@ const StorageService = {
         console.warn('雲端歷程背景同步延遲', e);
       }
     }, 1200);
+  },
+
+  // 同步單筆練習紀錄至 Google 試算表 _LOGS_ 分頁 (背景非同步)
+  async appendActivityLogToCloud(userObj, logEntry) {
+    if (!userObj || !logEntry) return;
+    try {
+      await fetch(CONFIG.GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'logActivity',
+          userId: userObj.id,
+          userName: userObj.name,
+          log: logEntry
+        })
+      });
+    } catch (e) {}
   },
 
   async deleteUserFromCloud(userId) {

@@ -3,7 +3,7 @@
 // 1. 頂部勇者 RPG 狀態列
 const ProfileBar = {
   name: 'ProfileBar',
-  props: ['currentUser', 'users'],
+  props: ['currentUser', 'users', 'todayWordCount'],
   emits: ['switch-user', 'open-profile-modal'],
   template: `
     <div class="pixel-box bg-[#1e293b] text-white px-3 sm:px-4 py-2.5 mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -18,8 +18,10 @@ const ProfileBar = {
           <div class="flex items-center gap-1.5">
             <span class="font-bold text-sm sm:text-base tracking-wider text-amber-300">勇者 {{ currentUser.name }}</span>
           </div>
-          <div class="text-[11px] text-emerald-300 flex items-center gap-1 mt-0.5">
-            <span>❤️ 斬龍戰績: {{ currentUser.bossVictories }} 勝</span>
+          <div class="text-[11px] text-emerald-300 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 mt-0.5">
+            <span>📅 今日練習: <b class="text-amber-200">{{ todayWordCount }}</b> 字</span>
+            <span>🔥 連勝: <b class="text-rose-300">{{ currentUser.streakDays || 0 }}</b> 天</span>
+            <span>❤️ 斬龍: {{ currentUser.bossVictories || 0 }} 勝</span>
           </div>
         </div>
       </div>
@@ -74,7 +76,7 @@ const NavBar = {
 // 3. 書本與課次選單組件 (復古羊皮紙工具列)
 const BookUnitSelector = {
   name: 'BookUnitSelector',
-  props: ['bookList', 'selectedBookId', 'unitList', 'selectedUnit', 'totalWords', 'currentMode', 'currentIndex', 'currentWordCount'],
+  props: ['bookList', 'selectedBookId', 'unitList', 'selectedUnit', 'totalWords', 'wrongWordsCount', 'currentMode', 'currentIndex', 'currentWordCount'],
   emits: ['change-book', 'change-unit'],
   template: `
     <div class="pixel-box-sm flex flex-col sm:flex-row sm:items-center justify-between mb-4 bg-[#f3e5ab] p-2.5 gap-2">
@@ -90,6 +92,7 @@ const BookUnitSelector = {
           <span class="text-xs font-bold text-slate-900">📚 課次:</span>
           <select :value="selectedUnit" @change="$emit('change-unit', $event.target.value)"
                   class="pixel-select bg-white text-slate-950 font-bold py-1 px-2 text-xs cursor-pointer">
+            <option v-if="wrongWordsCount > 0" value="WRONG_ONLY" class="text-rose-600 font-bold">🔥 弱點特訓 (本冊錯題 {{ wrongWordsCount }} 字)</option>
             <option value="ALL">全部 (共 {{ totalWords }} 字)</option>
             <option v-for="u in unitList" :key="u" :value="u">{{ u }}</option>
           </select>
@@ -106,7 +109,7 @@ const BookUnitSelector = {
 const UserProfileModal = {
   name: 'UserProfileModal',
   props: ['show', 'currentUser', 'users', 'allAvailableBooks'],
-  emits: ['close', 'save-user-settings', 'add-user', 'delete-user'],
+  emits: ['close', 'save-user-settings', 'add-user', 'delete-user', 'start-weakness-training', 'clear-wrong-words'],
   data() {
     return {
       editName: '',
@@ -141,6 +144,42 @@ const UserProfileModal = {
     spellRate() {
       if (!this.currentUser || !this.currentUser.spellAttempts) return 0;
       return Math.round((this.currentUser.spellCorrect / this.currentUser.spellAttempts) * 100);
+    },
+    topWrongWords() {
+      if (!this.currentUser || !this.currentUser.wrongWords) return [];
+      return Object.entries(this.currentUser.wrongWords)
+        .filter(([_, info]) => info && (info.count || 0) > 0)
+        .map(([word, info]) => ({
+          word,
+          meaning: info.meaning || '',
+          count: info.count || 1
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8);
+    },
+    totalWrongCount() {
+      if (!this.currentUser || !this.currentUser.wrongWords) return 0;
+      return Object.values(this.currentUser.wrongWords).filter(info => info && (info.count || 0) > 0).length;
+    },
+    recentLogs() {
+      if (!this.currentUser || !Array.isArray(this.currentUser.activityLogs)) return [];
+      return this.currentUser.activityLogs.slice(0, 20);
+    },
+    last7DaysSummary() {
+      const stats = (this.currentUser && this.currentUser.dailyStats) || {};
+      const days = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const key = `${yyyy}-${mm}-${dd}`;
+        const label = `${Number(mm)}/${Number(dd)}`;
+        const count = stats[key] ? (stats[key].count || 0) : 0;
+        days.push({ key, label, count, isToday: i === 0 });
+      }
+      return days;
     }
   },
   methods: {
@@ -232,8 +271,93 @@ const UserProfileModal = {
             <div class="pixel-en text-lg font-bold text-slate-950 mt-1">{{ listenRate }}%</div>
           </div>
           <div class="pixel-box-sm bg-purple-200 p-2.5">
-            <div class="text-xs font-bold text-slate-800">🐉 巨龍斬擊</div>
-            <div class="text-lg font-bold text-slate-950 mt-1">{{ currentUser.bossVictories }} 勝</div>
+            <div class="text-xs font-bold text-slate-800">🔥 連續天數</div>
+            <div class="text-lg font-bold text-slate-950 mt-1">{{ currentUser.streakDays || 0 }} 天</div>
+          </div>
+        </div>
+
+        <!-- 📅 近 7 日練習字數一覽 -->
+        <div class="pixel-box-sm mt-4 bg-sky-50/90 p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs sm:text-sm font-bold text-slate-900">📅 近 7 日練習量（字數）</span>
+            <span class="text-[11px] font-bold text-sky-800">斬龍戰績：{{ currentUser.bossVictories || 0 }} 勝</span>
+          </div>
+          <div class="grid grid-cols-7 gap-1.5 text-center">
+            <div v-for="day in last7DaysSummary" :key="day.key"
+                 :class="day.isToday ? 'bg-amber-200 border-slate-900' : 'bg-white border-slate-300'"
+                 class="border-2 p-1.5">
+              <div class="text-[10px] font-bold text-slate-600">{{ day.label }}</div>
+              <div class="pixel-en text-xs sm:text-sm font-bold mt-1"
+                   :class="day.count > 0 ? 'text-emerald-700' : 'text-slate-300'">
+                {{ day.count }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 📋 近期練習狀況紀錄 (家長檢視小孩每次練習明細) -->
+        <div class="pixel-box-sm mt-4 bg-white p-3.5 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs sm:text-sm font-bold text-slate-900">📋 近期練習狀況紀錄</span>
+            <span class="text-[11px] font-bold text-slate-500">顯示最新 {{ recentLogs.length }} 筆</span>
+          </div>
+
+          <div v-if="recentLogs.length === 0" class="text-xs text-slate-500 font-bold py-3 text-center bg-slate-50 border-2 border-slate-200">
+            尚無練習紀錄，開始溫習或挑戰後會自動記錄在這裡！
+          </div>
+
+          <div v-else class="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+            <div v-for="(log, idx) in recentLogs" :key="idx"
+                 class="flex items-center justify-between gap-2 bg-slate-50 border-2 border-slate-200 px-2.5 py-1.5 text-xs">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5">
+                  <span class="font-bold text-slate-900 shrink-0">{{ log.mode }}</span>
+                  <span class="text-slate-700 truncate font-bold">{{ log.detail }}</span>
+                </div>
+                <div class="text-[10px] text-slate-500 mt-0.5">{{ log.time }}<span v-if="log.bookName"> · {{ log.bookName }}</span></div>
+              </div>
+              <span :class="log.isSuccess ? 'bg-emerald-100 text-emerald-800 border-emerald-600' : 'bg-rose-100 text-rose-800 border-rose-500'"
+                    class="border px-1.5 py-0.5 text-[11px] font-bold shrink-0">
+                {{ log.result }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 🔥 魔王級錯題排行榜 (家長弱點追蹤面板) -->
+        <div class="pixel-box-sm mt-4 bg-rose-50 p-3.5 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5">
+              <span class="text-base">🔥</span>
+              <span class="text-xs sm:text-sm font-bold text-rose-900">弱點單字排行榜 (共 {{ totalWrongCount }} 字待加強)</span>
+            </div>
+            <div class="flex items-center gap-1.5" v-if="totalWrongCount > 0">
+              <button @click="$emit('start-weakness-training'); $emit('close')" type="button"
+                      class="pixel-btn bg-rose-500 hover:bg-rose-400 text-white font-bold px-2.5 py-1 text-xs">
+                ⚔️ 立即弱點特訓
+              </button>
+              <button @click="$emit('clear-wrong-words')" type="button"
+                      class="pixel-btn bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold px-2 py-1 text-xs">
+                清空
+              </button>
+            </div>
+          </div>
+
+          <div v-if="topWrongWords.length === 0" class="text-xs text-slate-600 font-bold py-2 text-center bg-white/80 border-2 border-slate-200">
+            ✨ 太棒了！目前沒有累積錯題，繼續保持！
+          </div>
+
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-36 overflow-y-auto">
+            <div v-for="(item, idx) in topWrongWords" :key="item.word"
+                 class="flex items-center justify-between bg-white border-2 border-slate-800 px-2.5 py-1.5 text-xs">
+              <div class="truncate pr-2">
+                <span class="font-extrabold text-slate-950 clear-word-font text-sm">{{ idx + 1 }}. {{ item.word }}</span>
+                <span v-if="item.meaning" class="text-slate-600 font-bold ml-1.5">({{ item.meaning }})</span>
+              </div>
+              <span class="bg-rose-500 text-white font-bold px-1.5 py-0.5 text-[11px] shrink-0">
+                錯 {{ item.count }} 次
+              </span>
+            </div>
           </div>
         </div>
 
@@ -312,7 +436,7 @@ const UserProfileModal = {
 const WordPracticeModal = {
   name: 'WordPracticeModal',
   props: ['show', 'word'],
-  emits: ['close', 'speak', 'practice-complete'],
+  emits: ['close', 'speak', 'practice-complete', 'practice-error'],
   setup(props, { emit }) {
     const { ref, computed, watch, nextTick } = Vue;
     const targetCount = ref(3);
@@ -527,6 +651,7 @@ const WordPracticeModal = {
         setTimeout(() => { isShaking.value = false; }, 400);
         statusMsg.value = '❌ 有些字母拼錯囉，看上方紅字修正！';
         statusColor.value = 'text-rose-600';
+        emit('practice-error', props.word);
       }
     };
 
@@ -671,7 +796,7 @@ const WordPracticeModal = {
 // 6. 單字溫習組件 (8-Bit 羊皮紙主視窗，含詞性徽章與動詞三態/形態變化補充)
 const StudyMode = {
   name: 'StudyMode',
-  props: ['word', 'currentRate', 'isListening', 'feedback', 'feedbackColor'],
+  props: ['word', 'currentRate', 'isListening', 'feedback', 'feedbackColor', 'wrongCount'],
   emits: ['set-rate', 'speak', 'voice-challenge', 'open-practice', 'next'],
   methods: {
     getPosBadgeStyle(pos) {
@@ -697,11 +822,16 @@ const StudyMode = {
       <div v-if="word" class="space-y-4 text-center">
         <!-- 核心單字卡 -->
         <div class="pixel-box-sm bg-white p-4 sm:p-6 landscape-compact-card relative">
-          <!-- 詞性徽章 (支援 pos / part_of_speech / 詞性 欄位) -->
-          <div v-if="word.pos || word.part_of_speech || word['詞性']" class="mb-2">
-            <span :class="getPosBadgeStyle(word.pos || word.part_of_speech || word['詞性'])" 
+          <!-- 詞性徽章 & 弱點警告標籤 -->
+          <div v-if="word.pos || word.part_of_speech || word['詞性'] || wrongCount > 0" class="mb-2 flex flex-wrap items-center justify-center gap-2">
+            <span v-if="word.pos || word.part_of_speech || word['詞性']"
+                  :class="getPosBadgeStyle(word.pos || word.part_of_speech || word['詞性'])" 
                   class="inline-block border-2 border-slate-900 px-2.5 py-0.5 text-xs sm:text-sm font-bold shadow-[2px_2px_0px_#0f172a]">
               🏷️ {{ word.pos || word.part_of_speech || word['詞性'] }}
+            </span>
+            <span v-if="wrongCount > 0"
+                  class="inline-block bg-rose-500 text-white border-2 border-slate-900 px-2.5 py-0.5 text-xs sm:text-sm font-bold shadow-[2px_2px_0px_#0f172a]">
+              🔥 弱點字 (曾錯 {{ wrongCount }} 次)
             </span>
           </div>
 
