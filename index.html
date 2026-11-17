@@ -124,6 +124,7 @@
   <profile-bar 
     :current-user="currentUser" 
     :users="users"
+    :today-word-count="todayWordCount"
     @switch-user="switchUser"
     @open-profile-modal="showProfileModal = true"
   ></profile-bar>
@@ -138,6 +139,7 @@
     :unit-list="unitList"
     :selected-unit="selectedUnit"
     :total-words="allRawWords.length"
+    :wrong-words-count="currentBookWrongWordsCount"
     :current-mode="currentMode"
     :current-index="currentIndex"
     :current-word-count="wordList.length"
@@ -161,6 +163,7 @@
       :is-listening="isListening"
       :feedback="studyFeedback"
       :feedback-color="studyFeedbackColor"
+      :wrong-count="currentWordWrongCount"
       @set-rate="setRate"
       @speak="speak"
       @voice-challenge="startListeningStudy"
@@ -230,11 +233,14 @@
     :show="showProfileModal"
     :current-user="currentUser"
     :users="users"
+    :today-word-count="todayWordCount"
     :all-available-books="allAvailableBooks"
     @close="showProfileModal = false"
     @save-user-settings="onSaveUserSettings"
     @add-user="onAddUser"
     @delete-user="onDeleteUser"
+    @start-weakness-training="startWeaknessTraining"
+    @clear-wrong-words="clearWrongWords"
   ></user-profile-modal>
 
   <!-- 單字默寫特訓彈窗 (5~10次) -->
@@ -244,14 +250,15 @@
     @close="showPracticeModal = false"
     @speak="speak"
     @practice-complete="onPracticeComplete"
+    @practice-error="onPracticeError"
   ></word-practice-modal>
 
 </div>
 
 <!-- 版本號 v=8bit_1 強制穿透快取 -->
-<script src="./js/config.js?v=8bit_wide_v5"></script>
-<script src="./js/services.js?v=8bit_wide_v5"></script>
-<script src="./js/components.js?v=8bit_wide_v5"></script>
-<script src="./js/app.js?v=8bit_wide_v5"></script>
+<script src="./js/config.js?v=8bit_wide_v7"></script>
+<script src="./js/services.js?v=8bit_wide_v7"></script>
+<script src="./js/components.js?v=8bit_wide_v7"></script>
+<script src="./js/app.js?v=8bit_wide_v7"></script>
 </body>
 </html>
