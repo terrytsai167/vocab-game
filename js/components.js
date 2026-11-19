@@ -435,8 +435,8 @@ const UserProfileModal = {
 // 5. 單字重複默寫特訓彈窗 (8-Bit 訓練道場)
 const WordPracticeModal = {
   name: 'WordPracticeModal',
-  props: ['show', 'word'],
-  emits: ['close', 'speak', 'practice-complete', 'practice-error'],
+  props: ['show', 'word', 'currentIndex', 'totalWords'],
+  emits: ['close', 'speak', 'practice-complete', 'practice-error', 'next-word'],
   setup(props, { emit }) {
     const { ref, computed, watch, nextTick } = Vue;
     const targetCount = ref(3);
@@ -594,8 +594,15 @@ const WordPracticeModal = {
 
     watch(() => props.show, (val) => {
       if (val) {
-        resetPracticeState(3);
+        resetPracticeState(targetCount.value || 3);
         if (props.word) emit('speak', props.word.word);
+      }
+    });
+
+    watch(() => props.word, (newVal, oldVal) => {
+      if (props.show && newVal && (!oldVal || newVal.word !== oldVal.word)) {
+        resetPracticeState(targetCount.value || 3);
+        emit('speak', newVal.word);
       }
     });
 
@@ -671,6 +678,9 @@ const WordPracticeModal = {
           <div class="flex items-center gap-2">
             <span class="text-xl">✍️</span>
             <h2 class="text-lg font-bold">勇者道場：默寫特訓</h2>
+            <span v-if="totalWords > 0" class="pixel-en text-[11px] bg-slate-800 text-amber-300 px-2 py-0.5">
+              {{ (currentIndex || 0) + 1 }}/{{ totalWords }}
+            </span>
           </div>
           <button @click="$emit('close')" class="pixel-btn bg-rose-500 text-white px-2.5 py-1 text-xs font-bold">✕</button>
         </div>
@@ -776,14 +786,18 @@ const WordPracticeModal = {
           <div class="text-5xl animate-bounce">🏆 ⭐ 🎖️</div>
           <h3 class="text-xl font-bold text-emerald-700">特訓達成！完成 {{ targetCount }} 次默寫！</h3>
           <p class="text-xs sm:text-sm text-slate-700">獲得 <b>+3 ★</b> 星幣獎勵！</p>
-          <div class="flex gap-2 pt-2">
+          <div class="flex flex-col sm:flex-row gap-2.5 pt-2">
+            <button @click="$emit('next-word')" type="button"
+                    class="pixel-btn flex-[1.5] bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold py-3 text-sm sm:text-base">
+              ⏭️ 練習下一個單字
+            </button>
             <button @click="resetPracticeState(targetCount)" type="button"
-                    class="pixel-btn flex-1 bg-amber-300 text-slate-950 font-bold py-2.5 text-xs sm:text-sm">
+                    class="pixel-btn flex-1 bg-sky-200 hover:bg-sky-300 text-slate-950 font-bold py-2.5 text-xs sm:text-sm">
               🔄 再練一輪
             </button>
             <button @click="$emit('close')" type="button"
-                    class="pixel-btn flex-1 bg-emerald-500 text-slate-950 font-bold py-2.5 text-xs sm:text-sm">
-              回到溫習 ➔
+                    class="pixel-btn flex-1 bg-slate-200 hover:bg-slate-300 text-slate-950 font-bold py-2.5 text-xs sm:text-sm">
+              回到溫習
             </button>
           </div>
         </div>
@@ -797,7 +811,7 @@ const WordPracticeModal = {
 const StudyMode = {
   name: 'StudyMode',
   props: ['word', 'currentRate', 'isListening', 'feedback', 'feedbackColor', 'wrongCount'],
-  emits: ['set-rate', 'speak', 'voice-challenge', 'open-practice', 'next'],
+  emits: ['set-rate', 'speak', 'voice-challenge', 'open-practice', 'prev', 'next'],
   methods: {
     getPosBadgeStyle(pos) {
       if (!pos) return 'bg-slate-200 text-slate-900';
@@ -876,9 +890,14 @@ const StudyMode = {
 
         <div v-if="feedback" class="text-sm sm:text-base font-bold" :class="feedbackColor">{{ feedback }}</div>
 
-        <button @click="$emit('next')" class="pixel-btn w-full bg-amber-400 hover:bg-amber-300 py-3.5 font-bold text-base sm:text-lg text-slate-950">
-          下一題 ➔
-        </button>
+        <div class="grid grid-cols-2 gap-2.5 sm:gap-3">
+          <button @click="$emit('prev')" class="pixel-btn bg-slate-200 hover:bg-slate-300 py-3.5 font-bold text-base sm:text-lg text-slate-900">
+            ⬅️ 上一題
+          </button>
+          <button @click="$emit('next')" class="pixel-btn bg-amber-400 hover:bg-amber-300 py-3.5 font-bold text-base sm:text-lg text-slate-950">
+            下一題 ➔
+          </button>
+        </div>
       </div>
     </div>
   `

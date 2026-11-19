@@ -700,6 +700,13 @@ const app = createApp({
           studyFeedbackColor.value = 'text-emerald-700';
           speak('Awesome!');
           recordWordStudied(currentWord.value.word);
+          recordActivityLog({
+            mode: '🎤 開口挑戰',
+            detail: `${currentWord.value.word} (${currentWord.value.meaning || ''})`,
+            result: '發音通過',
+            isSuccess: true,
+            wordDelta: 1
+          });
         } else {
           play8BitSfx('hit');
           studyFeedback.value = `聽到的是 "${spoken}"，再試一次！`;
@@ -710,24 +717,34 @@ const app = createApp({
       recognition.start();
     };
 
+    const prevWord = () => {
+      play8BitSfx('click');
+      studyFeedback.value = '';
+      if (wordList.value.length === 0) return;
+      if (currentIndex.value > 0) {
+        currentIndex.value--;
+      } else {
+        currentIndex.value = wordList.value.length - 1;
+      }
+    };
+
     const nextWord = () => {
       play8BitSfx('click');
       if (currentWord.value) {
         recordWordStudied(currentWord.value.word);
-        recordActivityLog({
-          mode: '📖 單字溫習',
-          detail: `${currentWord.value.word} (${currentWord.value.meaning || ''})`,
-          result: '已溫習',
-          isSuccess: true,
-          wordDelta: 1
-        });
       }
       studyFeedback.value = '';
+      if (wordList.value.length === 0) return;
       if (currentIndex.value < wordList.value.length - 1) {
         currentIndex.value++;
       } else {
         currentIndex.value = 0;
       }
+    };
+
+    // 在默寫特訓彈窗內直接切換到下一個單字繼續特訓
+    const nextPracticeWord = () => {
+      nextWord();
     };
 
     const startBossBattle = () => {
@@ -948,7 +965,7 @@ const app = createApp({
       bossQuestionIndex, bossTypedWord, currentWord, currentTrialWord,
       currentBossQuestion, maskedSentence, isRecognizing, isWritingActive,
       lastRecognizedLetter, loadWords, onBookChange, onUnitChange, setRate,
-      speak, setMode, nextWord, checkListenAnswer, pickLetter, removeLetter,
+      speak, setMode, prevWord, nextWord, nextPracticeWord, checkListenAnswer, pickLetter, removeLetter,
       resetSpelling, checkSpelling, startListeningStudy, startBossBattle,
       onWritingStart, onWritingEnd, onUpdateTypedWord, addSpaceToBossWord,
       backspaceBossWord, clearBossWord, submitBossAnswer, startBossVoiceAttack
