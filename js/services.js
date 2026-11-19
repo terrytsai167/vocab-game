@@ -147,6 +147,7 @@ const StorageService = {
         stars: 0,
         studiedWords: {},
         wrongWords: {},
+        savedWords: [],
         streakDays: 0,
         lastStudyDate: '',
         dailyStats: {},

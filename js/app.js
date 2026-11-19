@@ -173,6 +173,7 @@ const app = createApp({
         stars: 0,
         studiedWords: {},
         wrongWords: {},
+        savedWords: [],
         streakDays: 0,
         lastStudyDate: '',
         dailyStats: {},
@@ -352,6 +353,110 @@ const app = createApp({
       }
     };
 
+    // ==================== ⭐ 收藏單字管理 (收藏 / 新增 / 編修 / 刪除 / 特訓) ====================
+    const savedWordsCount = computed(() => {
+      return Array.isArray(currentUser.value.savedWords) ? currentUser.value.savedWords.length : 0;
+    });
+
+    const isCurrentWordFavorited = computed(() => {
+      if (!currentWord.value || !Array.isArray(currentUser.value.savedWords)) return false;
+      const key = String(currentWord.value.word || '').trim().toLowerCase();
+      return currentUser.value.savedWords.some(item => String(item.word || '').trim().toLowerCase() === key);
+    });
+
+    const toggleFavoriteWord = (wordObj) => {
+      if (!wordObj || !wordObj.word) return;
+      if (!Array.isArray(currentUser.value.savedWords)) currentUser.value.savedWords = [];
+      const key = String(wordObj.word).trim().toLowerCase();
+      const idx = currentUser.value.savedWords.findIndex(item => String(item.word || '').trim().toLowerCase() === key);
+
+      if (idx > -1) {
+        play8BitSfx('click');
+        currentUser.value.savedWords.splice(idx, 1);
+        studyFeedback.value = `已將 "${wordObj.word}" 移出收藏本`;
+        studyFeedbackColor.value = 'text-slate-600';
+        if (selectedUnit.value === 'SAVED_ONLY') {
+          applyUnitFilter();
+        }
+      } else {
+        play8BitSfx('coin');
+        currentUser.value.savedWords.unshift({
+          word: String(wordObj.word).trim(),
+          pos: String(wordObj.pos || wordObj.part_of_speech || wordObj['詞性'] || '').trim(),
+          meaning: String(wordObj.meaning || '').trim(),
+          grammar_note: String(wordObj.grammar_note || wordObj.tense || wordObj['變化補充'] || '').trim(),
+          sentence: String(wordObj.sentence || '').trim(),
+          sentence_cn: String(wordObj.sentence_cn || '').trim(),
+          bookName: currentBookName.value,
+          savedAt: Date.now()
+        });
+        studyFeedback.value = `⭐ 已收藏 "${wordObj.word}"！可在「歷程/課本」隨時編修筆記`;
+        studyFeedbackColor.value = 'text-amber-700';
+      }
+      saveUserData();
+    };
+
+    const addSavedWord = (newWordObj) => {
+      if (!newWordObj || !newWordObj.word) return;
+      if (!Array.isArray(currentUser.value.savedWords)) currentUser.value.savedWords = [];
+      const key = String(newWordObj.word).trim().toLowerCase();
+      const exists = currentUser.value.savedWords.some(item => String(item.word || '').trim().toLowerCase() === key);
+      if (exists) {
+        alert(`"${newWordObj.word}" 已經在收藏單字本裡面囉！可以直接點擊「✏️ 編修」修改內容。`);
+        return;
+      }
+      play8BitSfx('coin');
+      currentUser.value.savedWords.unshift({
+        ...newWordObj,
+        bookName: '自訂收藏',
+        savedAt: Date.now()
+      });
+      saveUserData();
+      if (selectedUnit.value === 'SAVED_ONLY') {
+        applyUnitFilter();
+      }
+    };
+
+    const updateSavedWord = ({ originalKey, updated }) => {
+      if (!Array.isArray(currentUser.value.savedWords)) return;
+      const idx = currentUser.value.savedWords.findIndex(item => String(item.word || '').trim().toLowerCase() === originalKey);
+      if (idx > -1) {
+        play8BitSfx('coin');
+        currentUser.value.savedWords[idx] = {
+          ...currentUser.value.savedWords[idx],
+          ...updated
+        };
+        saveUserData();
+        if (selectedUnit.value === 'SAVED_ONLY') {
+          applyUnitFilter();
+        }
+      }
+    };
+
+    const removeSavedWord = (wordText) => {
+      if (!Array.isArray(currentUser.value.savedWords)) return;
+      const key = String(wordText || '').trim().toLowerCase();
+      play8BitSfx('click');
+      currentUser.value.savedWords = currentUser.value.savedWords.filter(item => String(item.word || '').trim().toLowerCase() !== key);
+      saveUserData();
+      if (selectedUnit.value === 'SAVED_ONLY') {
+        applyUnitFilter();
+      }
+    };
+
+    const startSavedTraining = () => {
+      play8BitSfx('click');
+      if (savedWordsCount.value === 0) {
+        alert('目前收藏單字本還是空的喔！');
+        return;
+      }
+      selectedUnit.value = 'SAVED_ONLY';
+      currentUser.value.lastBookId = selectedBookId.value;
+      currentUser.value.lastUnit = 'SAVED_ONLY';
+      saveUserData();
+      applyUnitFilter();
+    };
+
     const onPracticeError = (wordObj) => {
       recordWrongWord(wordObj);
     };
@@ -479,7 +584,7 @@ const app = createApp({
         const availableUnits = Array.from(new Set(
           allRawWords.value.map(w => w.unit ? String(w.unit).trim() : '未分類').filter(u => u !== '')
         ));
-        selectedUnit.value = (targetUnit === 'ALL' || targetUnit === 'WRONG_ONLY' || availableUnits.includes(targetUnit)) ? targetUnit : 'ALL';
+        selectedUnit.value = (targetUnit === 'ALL' || targetUnit === 'WRONG_ONLY' || targetUnit === 'SAVED_ONLY' || availableUnits.includes(targetUnit)) ? targetUnit : 'ALL';
         
         applyUnitFilter();
       } catch (e) {
@@ -492,9 +597,26 @@ const app = createApp({
       }
     };
 
-    // 套用課次過濾 (含弱點特訓錯題本)
+    // 套用課次過濾 (含我的收藏本 & 弱點特訓錯題本)
     const applyUnitFilter = () => {
-      if (selectedUnit.value === 'WRONG_ONLY') {
+      if (selectedUnit.value === 'SAVED_ONLY') {
+        const saved = Array.isArray(currentUser.value.savedWords) ? currentUser.value.savedWords : [];
+        if (saved.length > 0) {
+          wordList.value = saved.map((s, idx) => ({
+            id: `saved_${idx}`,
+            unit: '我的收藏本',
+            word: s.word,
+            pos: s.pos || '',
+            meaning: s.meaning || '',
+            grammar_note: s.grammar_note || '',
+            sentence: s.sentence || '',
+            sentence_cn: s.sentence_cn || ''
+          }));
+        } else {
+          selectedUnit.value = 'ALL';
+          wordList.value = [...allRawWords.value];
+        }
+      } else if (selectedUnit.value === 'WRONG_ONLY') {
         const wMap = currentUser.value.wrongWords || {};
         const wrongFiltered = allRawWords.value.filter(w => {
           const key = String(w.word || '').trim().toLowerCase();
@@ -956,6 +1078,7 @@ const app = createApp({
       users, currentUser, currentUserId, todayWordCount, showProfileModal, showPracticeModal,
       switchUser, onSaveUserSettings, onAddUser, onDeleteUser, onPracticeComplete, onPracticeError,
       currentBookWrongWordsCount, currentWordWrongCount, startWeaknessTraining, clearWrongWords,
+      savedWordsCount, isCurrentWordFavorited, toggleFavoriteWord, addSavedWord, updateSavedWord, removeSavedWord, startSavedTraining,
       allAvailableBooks, visibleBookList, isLoading, allRawWords, wordList,
       selectedUnit, unitList, selectedBookId, currentIndex, currentRate,
       stars, currentMode, borderTheme, trialList, trialIndex, trialFeedback,

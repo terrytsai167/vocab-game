@@ -76,7 +76,7 @@ const NavBar = {
 // 3. 書本與課次選單組件 (復古羊皮紙工具列)
 const BookUnitSelector = {
   name: 'BookUnitSelector',
-  props: ['bookList', 'selectedBookId', 'unitList', 'selectedUnit', 'totalWords', 'wrongWordsCount', 'currentMode', 'currentIndex', 'currentWordCount'],
+  props: ['bookList', 'selectedBookId', 'unitList', 'selectedUnit', 'totalWords', 'wrongWordsCount', 'savedWordsCount', 'currentMode', 'currentIndex', 'currentWordCount'],
   emits: ['change-book', 'change-unit'],
   template: `
     <div class="pixel-box-sm flex flex-col sm:flex-row sm:items-center justify-between mb-4 bg-[#f3e5ab] p-2.5 gap-2">
@@ -92,6 +92,7 @@ const BookUnitSelector = {
           <span class="text-xs font-bold text-slate-900">📚 課次:</span>
           <select :value="selectedUnit" @change="$emit('change-unit', $event.target.value)"
                   class="pixel-select bg-white text-slate-950 font-bold py-1 px-2 text-xs cursor-pointer">
+            <option v-if="savedWordsCount > 0" value="SAVED_ONLY" class="text-amber-700 font-bold">⭐ 我的收藏本 (共 {{ savedWordsCount }} 字)</option>
             <option v-if="wrongWordsCount > 0" value="WRONG_ONLY" class="text-rose-600 font-bold">🔥 弱點特訓 (本冊錯題 {{ wrongWordsCount }} 字)</option>
             <option value="ALL">全部 (共 {{ totalWords }} 字)</option>
             <option v-for="u in unitList" :key="u" :value="u">{{ u }}</option>
@@ -109,7 +110,7 @@ const BookUnitSelector = {
 const UserProfileModal = {
   name: 'UserProfileModal',
   props: ['show', 'currentUser', 'users', 'allAvailableBooks'],
-  emits: ['close', 'save-user-settings', 'add-user', 'delete-user', 'start-weakness-training', 'clear-wrong-words'],
+  emits: ['close', 'save-user-settings', 'add-user', 'delete-user', 'start-weakness-training', 'clear-wrong-words', 'start-saved-training', 'add-saved-word', 'update-saved-word', 'remove-saved-word'],
   data() {
     return {
       editName: '',
@@ -117,7 +118,17 @@ const UserProfileModal = {
       selectedBooks: [],
       newUserName: '',
       newUserAvatar: '🧝‍♀️',
-      avatarList: ['🧙‍♂️', '🧝‍♀️', '🦸‍♂️', '🦸‍♀️', '🥷', '🧑‍🚀', '👸', '🤴', '🦁', '🦖']
+      avatarList: ['🧙‍♂️', '🧝‍♀️', '🦸‍♂️', '🦸‍♀️', '🥷', '🧑‍🚀', '👸', '🤴', '🦁', '🦖'],
+      // 收藏單字新增與編輯狀態
+      showAddSavedForm: false,
+      newSavedWord: '',
+      newSavedPos: '',
+      newSavedMeaning: '',
+      newSavedGrammar: '',
+      newSavedSentence: '',
+      newSavedSentenceCn: '',
+      editingSavedKey: null,
+      editSavedDraft: {}
     };
   },
   watch: {
@@ -160,6 +171,10 @@ const UserProfileModal = {
     totalWrongCount() {
       if (!this.currentUser || !this.currentUser.wrongWords) return 0;
       return Object.values(this.currentUser.wrongWords).filter(info => info && (info.count || 0) > 0).length;
+    },
+    savedWordList() {
+      if (!this.currentUser || !Array.isArray(this.currentUser.savedWords)) return [];
+      return this.currentUser.savedWords;
     },
     recentLogs() {
       if (!this.currentUser || !Array.isArray(this.currentUser.activityLogs)) return [];
@@ -244,6 +259,57 @@ const UserProfileModal = {
         avatar: this.newUserAvatar
       });
       this.newUserName = '';
+    },
+    submitNewSavedWord() {
+      const w = this.newSavedWord.trim();
+      const m = this.newSavedMeaning.trim();
+      if (!w || !m) {
+        alert('請至少填寫「英文單字」與「中文意思」喔！');
+        return;
+      }
+      this.$emit('add-saved-word', {
+        word: w,
+        pos: this.newSavedPos.trim(),
+        meaning: m,
+        grammar_note: this.newSavedGrammar.trim(),
+        sentence: this.newSavedSentence.trim() || `I can spell "${w}".`,
+        sentence_cn: this.newSavedSentenceCn.trim() || `我會拼寫 ${w}。`
+      });
+      this.newSavedWord = '';
+      this.newSavedPos = '';
+      this.newSavedMeaning = '';
+      this.newSavedGrammar = '';
+      this.newSavedSentence = '';
+      this.newSavedSentenceCn = '';
+      this.showAddSavedForm = false;
+    },
+    startEditSaved(item) {
+      this.editingSavedKey = item.word.toLowerCase();
+      this.editSavedDraft = { ...item };
+    },
+    cancelEditSaved() {
+      this.editingSavedKey = null;
+      this.editSavedDraft = {};
+    },
+    saveEditedWord() {
+      if (!this.editSavedDraft.word || !this.editSavedDraft.meaning) {
+        alert('英文單字與中文意思不可空白！');
+        return;
+      }
+      this.$emit('update-saved-word', {
+        originalKey: this.editingSavedKey,
+        updated: {
+          ...this.editSavedDraft,
+          word: this.editSavedDraft.word.trim(),
+          meaning: this.editSavedDraft.meaning.trim(),
+          pos: (this.editSavedDraft.pos || '').trim(),
+          grammar_note: (this.editSavedDraft.grammar_note || '').trim(),
+          sentence: (this.editSavedDraft.sentence || '').trim(),
+          sentence_cn: (this.editSavedDraft.sentence_cn || '').trim()
+        }
+      });
+      this.editingSavedKey = null;
+      this.editSavedDraft = {};
     }
   },
   template: `
@@ -320,6 +386,122 @@ const UserProfileModal = {
                     class="border px-1.5 py-0.5 text-[11px] font-bold shrink-0">
                 {{ log.result }}
               </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ⭐ 我的收藏單字本 (支援自訂新增、隨時編修與一鍵練習) -->
+        <div class="pixel-box-sm mt-4 bg-amber-50 p-3.5 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5">
+              <span class="text-base">⭐</span>
+              <span class="text-xs sm:text-sm font-bold text-amber-950">我的收藏單字本 (共 {{ savedWordList.length }} 字)</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button @click="showAddSavedForm = !showAddSavedForm" type="button"
+                      class="pixel-btn bg-sky-400 hover:bg-sky-300 text-slate-950 font-bold px-2.5 py-1 text-xs">
+                {{ showAddSavedForm ? '收合表單' : '+ 自訂新單字' }}
+              </button>
+              <button v-if="savedWordList.length > 0"
+                      @click="$emit('start-saved-training'); $emit('close')" type="button"
+                      class="pixel-btn bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold px-2.5 py-1 text-xs">
+                📖 練習收藏本
+              </button>
+            </div>
+          </div>
+
+          <!-- 手動新增自訂收藏單字表單 -->
+          <div v-if="showAddSavedForm" class="bg-white border-2 border-slate-800 p-3 space-y-2 text-xs">
+            <div class="font-bold text-slate-800">✍️ 新增自訂收藏單字：</div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <input v-model="newSavedWord" type="text" placeholder="英文單字 * (如: library)"
+                     class="pixel-input bg-amber-50/60 px-2.5 py-1.5 font-bold text-slate-900">
+              <input v-model="newSavedPos" type="text" placeholder="詞性 (如: 名詞 (n.))"
+                     class="pixel-input bg-amber-50/60 px-2.5 py-1.5 font-bold text-slate-900">
+              <input v-model="newSavedMeaning" type="text" placeholder="中文意思 * (如: 圖書館)"
+                     class="pixel-input bg-amber-50/60 px-2.5 py-1.5 font-bold text-slate-900">
+            </div>
+            <input v-model="newSavedGrammar" type="text" placeholder="補充筆記 / 動詞三態 (選填)"
+                   class="pixel-input w-full bg-amber-50/60 px-2.5 py-1.5 font-bold text-slate-900">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input v-model="newSavedSentence" type="text" placeholder="英文例句 (選填，留空自動產生)"
+                     class="pixel-input bg-amber-50/60 px-2.5 py-1.5 font-bold text-slate-900">
+              <input v-model="newSavedSentenceCn" type="text" placeholder="例句中文翻譯 (選填)"
+                     class="pixel-input bg-amber-50/60 px-2.5 py-1.5 font-bold text-slate-900">
+            </div>
+            <button @click="submitNewSavedWord" type="button"
+                    class="pixel-btn w-full bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold py-2 text-xs">
+              ✅ 加入收藏單字本
+            </button>
+          </div>
+
+          <div v-if="savedWordList.length === 0 && !showAddSavedForm" class="text-xs text-slate-600 font-bold py-2 text-center bg-white/80 border-2 border-slate-200">
+            點擊單字卡右上角「☆ 收藏」或上方「+ 自訂新單字」，即可建立專屬收藏本並隨時編修！
+          </div>
+
+          <!-- 收藏單字清單（支援逐筆展開編修釋義、詞性、三態筆記與例句） -->
+          <div v-else-if="savedWordList.length > 0" class="space-y-2 max-h-56 overflow-y-auto pr-1">
+            <div v-for="item in savedWordList" :key="item.word"
+                 class="bg-white border-2 border-slate-800 p-2.5 text-xs">
+              
+              <!-- 檢視模式 -->
+              <div v-if="editingSavedKey !== item.word.toLowerCase()" class="flex items-start justify-between gap-2">
+                <div class="min-w-0 flex-1 space-y-0.5">
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="font-extrabold text-slate-950 clear-word-font text-sm sm:text-base">{{ item.word }}</span>
+                    <span v-if="item.pos" class="bg-amber-200 border border-slate-700 px-1.5 py-0.2 text-[10px] font-bold">{{ item.pos }}</span>
+                    <span class="font-bold text-emerald-700">{{ item.meaning }}</span>
+                  </div>
+                  <div v-if="item.grammar_note && item.grammar_note !== '-'" class="text-[11px] text-amber-800 font-bold">
+                    📘 {{ item.grammar_note }}
+                  </div>
+                  <div v-if="item.sentence" class="text-[11px] text-slate-600 truncate">
+                    “ {{ item.sentence }} ”
+                  </div>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                  <button @click="startEditSaved(item)" type="button"
+                          class="pixel-btn bg-sky-200 hover:bg-sky-300 text-slate-900 font-bold px-2 py-1 text-[11px]">
+                    ✏️ 編修
+                  </button>
+                  <button @click="$emit('remove-saved-word', item.word)" type="button"
+                          class="pixel-btn bg-rose-200 hover:bg-rose-300 text-rose-900 font-bold px-2 py-1 text-[11px]">
+                    🗑️
+                  </button>
+                </div>
+              </div>
+
+              <!-- 編修模式 -->
+              <div v-else class="space-y-2 bg-sky-50/70 p-2 border border-sky-300">
+                <div class="font-bold text-sky-900">✏️ 編修單字內容：</div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                  <input v-model="editSavedDraft.word" type="text" placeholder="英文單字"
+                         class="pixel-input bg-white px-2 py-1 font-bold text-slate-900">
+                  <input v-model="editSavedDraft.pos" type="text" placeholder="詞性 (如: 動詞 (v.))"
+                         class="pixel-input bg-white px-2 py-1 font-bold text-slate-900">
+                  <input v-model="editSavedDraft.meaning" type="text" placeholder="中文意思"
+                         class="pixel-input bg-white px-2 py-1 font-bold text-slate-900">
+                </div>
+                <input v-model="editSavedDraft.grammar_note" type="text" placeholder="補充筆記 / 動詞三態"
+                       class="pixel-input w-full bg-white px-2 py-1 font-bold text-slate-900">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  <input v-model="editSavedDraft.sentence" type="text" placeholder="英文例句"
+                         class="pixel-input bg-white px-2 py-1 font-bold text-slate-900">
+                  <input v-model="editSavedDraft.sentence_cn" type="text" placeholder="例句中文翻譯"
+                         class="pixel-input bg-white px-2 py-1 font-bold text-slate-900">
+                </div>
+                <div class="flex justify-end gap-1.5 pt-1">
+                  <button @click="cancelEditSaved" type="button"
+                          class="pixel-btn bg-slate-200 text-slate-800 font-bold px-2.5 py-1 text-[11px]">
+                    取消
+                  </button>
+                  <button @click="saveEditedWord" type="button"
+                          class="pixel-btn bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold px-3 py-1 text-[11px]">
+                    💾 儲存修改
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
@@ -810,8 +992,8 @@ const WordPracticeModal = {
 // 6. 單字溫習組件 (8-Bit 羊皮紙主視窗，含詞性徽章與動詞三態/形態變化補充)
 const StudyMode = {
   name: 'StudyMode',
-  props: ['word', 'currentRate', 'isListening', 'feedback', 'feedbackColor', 'wrongCount'],
-  emits: ['set-rate', 'speak', 'voice-challenge', 'open-practice', 'prev', 'next'],
+  props: ['word', 'currentRate', 'isListening', 'feedback', 'feedbackColor', 'wrongCount', 'isFavorited'],
+  emits: ['set-rate', 'speak', 'voice-challenge', 'open-practice', 'toggle-favorite', 'prev', 'next'],
   methods: {
     getPosBadgeStyle(pos) {
       if (!pos) return 'bg-slate-200 text-slate-900';
@@ -836,6 +1018,15 @@ const StudyMode = {
       <div v-if="word" class="space-y-4 text-center">
         <!-- 核心單字卡 -->
         <div class="pixel-box-sm bg-white p-4 sm:p-6 landscape-compact-card relative">
+          <!-- 右上角收藏按鈕 -->
+          <button @click="$emit('toggle-favorite', word)" 
+                  type="button"
+                  :title="isFavorited ? '取消收藏' : '加入單字收藏本'"
+                  :class="isFavorited ? 'bg-amber-300 text-rose-600' : 'bg-slate-100 text-slate-500 hover:bg-amber-100'"
+                  class="pixel-btn absolute top-2.5 right-2.5 px-2.5 py-1 text-xs sm:text-sm font-bold flex items-center gap-1">
+            <span>{{ isFavorited ? '⭐ 已收藏' : '☆ 收藏' }}</span>
+          </button>
+
           <!-- 詞性徽章 & 弱點警告標籤 -->
           <div v-if="word.pos || word.part_of_speech || word['詞性'] || wrongCount > 0" class="mb-2 flex flex-wrap items-center justify-center gap-2">
             <span v-if="word.pos || word.part_of_speech || word['詞性']"
