@@ -168,6 +168,7 @@
       @speak="speak"
       @voice-challenge="startListeningStudy"
       @open-practice="showPracticeModal = true"
+      @prev="prevWord"
       @next="nextWord"
     ></study-mode>
 
@@ -247,6 +248,9 @@
   <word-practice-modal
     :show="showPracticeModal"
     :word="currentWord"
+    :current-index="currentIndex"
+    :total-words="wordList.length"
+    @next-word="nextPracticeWord"
     @close="showPracticeModal = false"
     @speak="speak"
     @practice-complete="onPracticeComplete"
@@ -256,9 +260,9 @@
 </div>
 
 <!-- 版本號 v=8bit_1 強制穿透快取 -->
-<script src="./js/config.js?v=8bit_wide_v7"></script>
-<script src="./js/services.js?v=8bit_wide_v7"></script>
-<script src="./js/components.js?v=8bit_wide_v7"></script>
-<script src="./js/app.js?v=8bit_wide_v7"></script>
+<script src="./js/config.js?v=8bit_wide_v8"></script>
+<script src="./js/services.js?v=8bit_wide_v8"></script>
+<script src="./js/components.js?v=8bit_wide_v8"></script>
+<script src="./js/app.js?v=8bit_wide_v8"></script>
 </body>
 </html>
