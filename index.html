@@ -140,6 +140,7 @@
     :selected-unit="selectedUnit"
     :total-words="allRawWords.length"
     :wrong-words-count="currentBookWrongWordsCount"
+    :saved-words-count="savedWordsCount"
     :current-mode="currentMode"
     :current-index="currentIndex"
     :current-word-count="wordList.length"
@@ -164,6 +165,8 @@
       :feedback="studyFeedback"
       :feedback-color="studyFeedbackColor"
       :wrong-count="currentWordWrongCount"
+      :is-favorited="isCurrentWordFavorited"
+      @toggle-favorite="toggleFavoriteWord"
       @set-rate="setRate"
       @speak="speak"
       @voice-challenge="startListeningStudy"
@@ -242,6 +245,10 @@
     @delete-user="onDeleteUser"
     @start-weakness-training="startWeaknessTraining"
     @clear-wrong-words="clearWrongWords"
+    @start-saved-training="startSavedTraining"
+    @add-saved-word="addSavedWord"
+    @update-saved-word="updateSavedWord"
+    @remove-saved-word="removeSavedWord"
   ></user-profile-modal>
 
   <!-- 單字默寫特訓彈窗 (5~10次) -->
@@ -260,9 +267,9 @@
 </div>
 
 <!-- 版本號 v=8bit_1 強制穿透快取 -->
-<script src="./js/config.js?v=8bit_wide_v8"></script>
-<script src="./js/services.js?v=8bit_wide_v8"></script>
-<script src="./js/components.js?v=8bit_wide_v8"></script>
-<script src="./js/app.js?v=8bit_wide_v8"></script>
+<script src="./js/config.js?v=8bit_wide_v9"></script>
+<script src="./js/services.js?v=8bit_wide_v9"></script>
+<script src="./js/components.js?v=8bit_wide_v9"></script>
+<script src="./js/app.js?v=8bit_wide_v9"></script>
 </body>
 </html>
