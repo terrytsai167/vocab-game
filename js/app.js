@@ -10,7 +10,8 @@ const app = createApp({
     StudyMode,
     ListenTrial,
     SpellTrial,
-    BossBattle
+    BossBattle,
+    TranslateTool
   },
   setup() {
     // 1. 初始化讀取本機快取

@@ -221,6 +221,31 @@ const StorageService = {
     }, 1200);
   },
 
+// ==================== 即時 AI 翻譯與文法解析服務 ====================
+async function translateAndAnalyzeText(queryText) {
+  const cleanText = String(queryText || '').trim();
+  if (!cleanText) throw new Error('請輸入要查詢的英文或中文！');
+
+  const res = await fetch(CONFIG.GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({
+      action: 'translate',
+      text: cleanText
+    })
+  });
+
+  if (!res.ok) {
+    throw new Error(`伺服器連線失敗 (HTTP ${res.status})`);
+  }
+
+  const data = await res.json();
+  if (data.status === 'error' || data.error) {
+    throw new Error(data.message || data.error || 'AI 翻譯解析失敗');
+  }
+  return data;
+}
+
   // 同步單筆練習紀錄至 Google 試算表 _LOGS_ 分頁 (背景非同步)
   async appendActivityLogToCloud(userObj, logEntry) {
     if (!userObj || !logEntry) return;

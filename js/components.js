@@ -65,6 +65,9 @@ const NavBar = {
         <button @click="$emit('set-mode', 'boss')" 
                 :class="currentMode === 'boss' ? 'bg-rose-500 text-white -translate-y-0.5 animate-pulse' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'"
                 class="pixel-btn px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-xs sm:text-sm font-bold">⚔️ 決戰 Boss</button>
+        <button @click="$emit('set-mode', 'translate')" 
+                :class="currentMode === 'translate' ? 'bg-purple-400 text-slate-950 -translate-y-0.5' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'"
+                class="pixel-btn px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-xs sm:text-sm font-bold">🌐 即時翻譯</button>
       </div>
       <div class="pixel-box-sm bg-slate-900 px-3 py-1 text-amber-300 font-bold text-xs sm:text-sm flex items-center gap-1">
         <span>★ 星幣:</span><span class="pixel-en text-base">{{ stars }}</span>
@@ -1469,6 +1472,209 @@ const BossBattle = {
         <button @click="$emit('restart')" class="pixel-btn bg-rose-500 hover:bg-rose-400 text-white font-bold px-6 py-3 text-sm sm:text-base">
           重新挑戰 ➔
         </button>
+      </div>
+    </div>
+  `
+};
+
+
+// 10. 即時翻譯與 AI 文法/例句生成器組件 (支援一鍵收藏至我的收藏本)
+const TranslateTool = {
+  name: 'TranslateTool',
+  props: ['savedWords'],
+  emits: ['speak', 'toggle-favorite'],
+  setup(props, { emit }) {
+    const { ref, computed } = Vue;
+    const inputText = ref('');
+    const isLoading = ref(false);
+    const errorMsg = ref('');
+    const result = ref(null);
+    const recentHistory = ref([]);
+
+    const isFavorited = computed(() => {
+      if (!result.value || !result.value.word || !Array.isArray(props.savedWords)) return false;
+      const key = String(result.value.word).trim().toLowerCase();
+      return props.savedWords.some(item => String(item.word || '').trim().toLowerCase() === key);
+    });
+
+    const handleTranslate = async () => {
+      const q = inputText.value.trim();
+      if (!q || isLoading.value) return;
+      if (typeof play8BitSfx === 'function') play8BitSfx('click');
+
+      isLoading.value = true;
+      errorMsg.value = '';
+
+      try {
+        const data = await translateAndAnalyzeText(q);
+        result.value = data;
+        if (typeof play8BitSfx === 'function') play8BitSfx('coin');
+
+        // 保留最近 6 筆查詢紀錄方便快速回點
+        const existsIdx = recentHistory.value.findIndex(
+          h => h.word && data.word && h.word.toLowerCase() === data.word.toLowerCase()
+        );
+        if (existsIdx > -1) recentHistory.value.splice(existsIdx, 1);
+        recentHistory.value.unshift(data);
+        if (recentHistory.value.length > 6) recentHistory.value.pop();
+      } catch (err) {
+        if (typeof play8BitSfx === 'function') play8BitSfx('hit');
+        errorMsg.value = err.message || '翻譯失敗，請確認 Apps Script 已更新並重新部署！';
+      } finally {
+        isLoading.value = false;
+      }
+    };
+
+    const clearInput = () => {
+      if (typeof play8BitSfx === 'function') play8BitSfx('click');
+      inputText.value = '';
+      errorMsg.value = '';
+    };
+
+    const handleSaveToggle = () => {
+      if (!result.value) return;
+      emit('toggle-favorite', {
+        word: result.value.word,
+        pos: result.value.pos || '',
+        meaning: result.value.meaning || '',
+        grammar_note: result.value.grammar_note || '',
+        sentence: result.value.sentence || '',
+        sentence_cn: result.value.sentence_cn || ''
+      });
+    };
+
+    const selectHistoryItem = (item) => {
+      if (typeof play8BitSfx === 'function') play8BitSfx('click');
+      result.value = item;
+      inputText.value = item.word || '';
+      errorMsg.value = '';
+    };
+
+    const getPosBadgeStyle = (pos) => {
+      if (!pos) return 'bg-slate-200 text-slate-900';
+      const p = String(pos).toLowerCase();
+      if (p.includes('動詞') || p.includes('v.')) return 'bg-rose-300 text-slate-950';
+      if (p.includes('形容詞') || p.includes('adj')) return 'bg-sky-300 text-slate-950';
+      if (p.includes('副詞') || p.includes('adv')) return 'bg-purple-300 text-slate-950';
+      if (p.includes('名詞') || p.includes('n.')) return 'bg-amber-300 text-slate-950';
+      return 'bg-emerald-300 text-slate-950';
+    };
+
+    return {
+      inputText, isLoading, errorMsg, result, recentHistory,
+      isFavorited, handleTranslate, clearInput, handleSaveToggle,
+      selectHistoryItem, getPosBadgeStyle
+    };
+  },
+  template: `
+    <div class="space-y-4">
+      <!-- 頂部說明橫幅 -->
+      <div class="pixel-box-sm bg-purple-100 p-3 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🌐</span>
+          <div>
+            <h2 class="text-sm sm:text-base font-bold text-purple-950">AI 即時翻譯與文法魔法書</h2>
+            <p class="text-xs text-purple-800 font-bold">輸入英文或中文（單字、片語或句子），自動產生翻譯、例句與文法解析！</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 輸入與查詢區 -->
+      <div class="pixel-box-sm bg-white p-3.5 sm:p-4 space-y-2.5">
+        <div class="flex flex-col sm:flex-row gap-2">
+          <input v-model="inputText"
+                 @keyup.enter="handleTranslate"
+                 type="text"
+                 placeholder="輸入英文或中文，例如：encourage、library 或 堅持不懈..."
+                 class="pixel-input clear-word-font flex-1 bg-amber-50/60 px-3.5 py-2.5 text-base sm:text-lg font-bold text-slate-950">
+          <div class="flex gap-2 shrink-0">
+            <button v-if="inputText" @click="clearInput" type="button"
+                    class="pixel-btn bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold px-3 py-2 text-xs sm:text-sm">
+              清空
+            </button>
+            <button @click="handleTranslate" :disabled="isLoading || !inputText.trim()" type="button"
+                    :class="isLoading ? 'bg-purple-300 cursor-wait' : 'bg-purple-400 hover:bg-purple-300'"
+                    class="pixel-btn flex-1 sm:flex-none text-slate-950 font-bold px-5 py-2.5 text-sm sm:text-base flex items-center justify-center gap-1.5">
+              <span>{{ isLoading ? '⏳ 解析中...' : '✨ 翻譯與解析' }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 最近查詢快速標籤 -->
+        <div v-if="recentHistory.length > 0" class="flex flex-wrap items-center gap-1.5 pt-1">
+          <span class="text-[11px] font-bold text-slate-500">最近查詢：</span>
+          <button v-for="(h, idx) in recentHistory" :key="idx"
+                  @click="selectHistoryItem(h)" type="button"
+                  class="bg-slate-100 hover:bg-purple-100 border border-slate-400 px-2 py-0.5 text-xs font-bold text-slate-800 clear-word-font">
+            {{ h.word }}
+          </button>
+        </div>
+
+        <div v-if="errorMsg" class="bg-rose-100 border-2 border-rose-600 text-rose-800 px-3 py-2 text-xs sm:text-sm font-bold">
+          ⚠️ {{ errorMsg }}
+        </div>
+      </div>
+
+      <!-- AI 生成結果卡片 -->
+      <div v-if="result" class="space-y-3">
+        <!-- 主單字 / 翻譯結果與收藏按鈕 -->
+        <div class="pixel-box-sm bg-white p-4 sm:p-6 relative text-center">
+          <button @click="handleSaveToggle"
+                  type="button"
+                  :class="isFavorited ? 'bg-amber-300 text-rose-600' : 'bg-slate-100 text-slate-700 hover:bg-amber-200'"
+                  class="pixel-btn absolute top-3 right-3 px-3 py-1.5 text-xs sm:text-sm font-bold flex items-center gap-1">
+            <span>{{ isFavorited ? '⭐ 已收藏' : '☆ 收藏單字' }}</span>
+          </button>
+
+          <div v-if="result.pos" class="mb-2 mt-4 sm:mt-0">
+            <span :class="getPosBadgeStyle(result.pos)"
+                  class="inline-block border-2 border-slate-900 px-2.5 py-0.5 text-xs sm:text-sm font-bold shadow-[2px_2px_0px_#0f172a]">
+              🏷️ {{ result.pos }}
+            </span>
+          </div>
+
+          <div class="flex items-center justify-center gap-3 px-2 mt-1">
+            <h2 :class="result.word.length > 18 ? 'text-2xl sm:text-4xl' : 'text-3xl sm:text-5xl'"
+                class="clear-word-font font-extrabold text-slate-950 break-words leading-tight">
+              {{ result.word }}
+            </h2>
+            <button @click="$emit('speak', result.word)" type="button"
+                    class="pixel-btn bg-sky-400 hover:bg-sky-300 text-slate-950 p-2.5 text-lg shrink-0">
+              🔊
+            </button>
+          </div>
+
+          <p class="text-xl sm:text-2xl font-bold text-emerald-700 mt-3">{{ result.meaning }}</p>
+
+          <div v-if="result.grammar_note && result.grammar_note !== '-'"
+               class="mt-3 inline-block bg-amber-100 border-2 border-slate-800 px-3 py-1.5 text-xs sm:text-sm font-bold text-slate-900">
+            <span>📘 詞形變化：{{ result.grammar_note }}</span>
+          </div>
+        </div>
+
+        <!-- 實用生活例句卡 -->
+        <div v-if="result.sentence"
+             @click="$emit('speak', result.sentence)"
+             class="pixel-box-sm bg-[#f8fafc] hover:bg-sky-50 p-3.5 sm:p-4 text-left cursor-pointer transition">
+          <div class="flex justify-between items-start gap-2">
+            <div>
+              <span class="text-[11px] font-bold text-sky-700 block mb-1">💬 實用生活例句（點擊發音）：</span>
+              <p class="clear-word-font text-base sm:text-lg font-extrabold text-slate-900">“ {{ result.sentence }} ”</p>
+            </div>
+            <span class="text-sky-600 text-lg shrink-0">🔊</span>
+          </div>
+          <p v-if="result.sentence_cn" class="text-xs sm:text-sm text-slate-600 mt-1.5 font-bold">{{ result.sentence_cn }}</p>
+        </div>
+
+        <!-- 重點文法與用法解析卡 -->
+        <div v-if="result.grammar_analysis"
+             class="pixel-box-sm bg-purple-50/90 p-3.5 sm:p-4 text-left space-y-1.5">
+          <div class="flex items-center gap-1.5 text-xs sm:text-sm font-bold text-purple-950">
+            <span>🧙‍♂️</span>
+            <span>文法與用法小教室：</span>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-800 font-bold leading-relaxed whitespace-pre-line">{{ result.grammar_analysis }}</p>
+        </div>
       </div>
     </div>
   `
