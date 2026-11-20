@@ -133,7 +133,8 @@
   <nav-bar :current-mode="currentMode" :stars="stars" @set-mode="setMode"></nav-bar>
 
   <!-- 單字本與課次雙層選單 -->
-  <book-unit-selector 
+  <book-unit-selector
+    v-if="currentMode !== 'translate'"  
     :book-list="visibleBookList"
     :selected-book-id="selectedBookId"
     :unit-list="unitList"
@@ -230,6 +231,13 @@
       @writing-end="onWritingEnd"
       @update-typed-word="onUpdateTypedWord"
     ></boss-battle>
+
+    <translate-tool
+      v-else-if="currentMode === 'translate'"
+      :saved-words="currentUser.savedWords || []"
+      @speak="speak"
+      @toggle-favorite="toggleFavoriteWord"
+    ></translate-tool>
   </template>
 
   <!-- 學習歷程與課本指定彈窗 -->
@@ -267,9 +275,9 @@
 </div>
 
 <!-- 版本號 v=8bit_1 強制穿透快取 -->
-<script src="./js/config.js?v=8bit_wide_v9"></script>
-<script src="./js/services.js?v=8bit_wide_v9"></script>
-<script src="./js/components.js?v=8bit_wide_v9"></script>
-<script src="./js/app.js?v=8bit_wide_v9"></script>
+<script src="./js/config.js?v=8bit_wide_v10"></script>
+<script src="./js/services.js?v=8bit_wide_v10"></script>
+<script src="./js/components.js?v=8bit_wide_v10"></script>
+<script src="./js/app.js?v=8bit_wide_v10"></script>
 </body>
 </html>
