@@ -107,6 +107,20 @@
     }
     .shake-anim { animation: shake 0.4s ease-in-out; }
 
+    @keyframes critFlash {
+      0% { box-shadow: 0 0 0px rgba(250, 204, 21, 0), inset 0 0 0px rgba(250, 204, 21, 0); transform: scale(1); }
+      25% { box-shadow: 0 0 32px rgba(250, 204, 21, 0.95), inset 0 0 24px rgba(253, 224, 71, 0.85); transform: scale(1.015); }
+      100% { box-shadow: 0 0 0px rgba(250, 204, 21, 0), inset 0 0 0px rgba(250, 204, 21, 0); transform: scale(1); }
+    }
+    .crit-flash-anim { animation: critFlash 0.55s ease-out; }
+
+    @keyframes comboPop {
+      0% { transform: scale(0.6) rotate(-4deg); opacity: 0; }
+      60% { transform: scale(1.15) rotate(2deg); opacity: 1; }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+    .combo-pop-anim { animation: comboPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
     .handwriting-canvas {
       touch-action: none !important;
       -webkit-user-drag: none;
@@ -126,6 +140,8 @@
     :users="users"
     :today-word-count="todayWordCount"
     :equipped-gear="equippedGear"
+      :combo="comboCount"
+      :is-crit-hit="isCritHit"
     @switch-user="switchUser"
     @open-profile-modal="showProfileModal = true"
     @open-shop-modal="showShopModal = true"
@@ -183,6 +199,7 @@
       :word="currentTrialWord"
       :trial-index="trialIndex"
       :total-trials="trialList.length"
+      :combo="comboCount"
       :feedback="trialFeedback"
       :feedback-color="trialFeedbackColor"
       @speak="speak"
@@ -194,6 +211,7 @@
       :word="currentTrialWord"
       :trial-index="trialIndex"
       :total-trials="trialList.length"
+      :combo="comboCount"
       :spelled-letters="spelledLetters"
       :scrambled-pool="scrambledPool"
       :feedback="trialFeedback"
@@ -213,6 +231,8 @@
       :timer="timer"
       :max-timer="maxBossTime"
       :equipped-gear="equippedGear"
+      :combo="comboCount"
+      :is-crit-hit="isCritHit"
       :is-writing-active="isWritingActive"
       :question="currentBossQuestion"
       :question-index="bossQuestionIndex"
@@ -289,9 +309,9 @@
 </div>
 
 <!-- 版本號 v=8bit_1 強制穿透快取 -->
-<script src="./js/config.js?v=8bit_wide_v12"></script>
-<script src="./js/services.js?v=8bit_wide_v12"></script>
-<script src="./js/components.js?v=8bit_wide_v12"></script>
-<script src="./js/app.js?v=8bit_wide_v12"></script>
+<script src="./js/config.js?v=8bit_wide_v13"></script>
+<script src="./js/services.js?v=8bit_wide_v13"></script>
+<script src="./js/components.js?v=8bit_wide_v13"></script>
+<script src="./js/app.js?v=8bit_wide_v13"></script>
 </body>
 </html>
