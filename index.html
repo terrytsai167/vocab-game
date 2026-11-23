@@ -164,9 +164,13 @@
     :users="users"
     :today-word-count="todayWordCount"
     :equipped-gear="equippedGear"
+    :streak-title="streakTitle"
+    :treasure-status="treasureStatus"
+    :double-star-remaining-sec="doubleStarRemainingSec"
     @switch-user="switchUser"
     @open-profile-modal="showProfileModal = true"
     @open-shop-modal="showShopModal = true"
+    @open-treasure-chest="openDailyTreasureChest"
   ></profile-bar>
 
   <!-- 頂部四大模式切換 -->
@@ -248,6 +252,7 @@
     <boss-battle 
       v-else-if="currentMode === 'boss'"
       :game-state="bossGameState"
+      :boss-info="currentBossInfo"
       :boss-hp="bossHp"
       :player-hp="playerHp"
       :timer="timer"
@@ -279,8 +284,12 @@
     <translate-tool
       v-else-if="currentMode === 'translate'"
       :saved-words="currentUser.savedWords || []"
+      :treasure-task="currentUser.treasureHuntTask"
       @speak="speak"
       @toggle-favorite="toggleFavoriteWord"
+      @set-treasure-task="setTreasureTask"
+      @complete-treasure-task="completeTreasureTask"
+      @clear-treasure-task="clearTreasureTask"
     ></translate-tool>
   </template>
 
@@ -302,6 +311,22 @@
     @update-saved-word="updateSavedWord"
     @remove-saved-word="removeSavedWord"
   ></user-profile-modal>
+
+  <!-- 🎁 每日勇者寶箱開啟驚喜彈窗 -->
+  <div v-if="treasureChestPopup" class="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
+    <div class="combo-pop-anim pixel-box bg-[#fffbeb] w-full max-w-md p-6 text-center space-y-3 text-slate-900">
+      <div class="text-5xl animate-bounce">🎁 ✨ 💰</div>
+      <h2 class="text-xl font-extrabold text-amber-700">今日勇者寶箱開啟！</h2>
+      <div class="pixel-box-sm bg-amber-200 p-3 text-base sm:text-lg font-extrabold text-rose-700">
+        {{ treasureChestPopup.title }}
+      </div>
+      <p class="text-xs sm:text-sm font-bold text-slate-700">{{ treasureChestPopup.desc }}</p>
+      <button @click="treasureChestPopup = null" type="button"
+              class="pixel-btn w-full bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold py-2.5 text-sm">
+        太棒了！繼續冒險 ➔
+      </button>
+    </div>
+  </div>
 
   <!-- 勇者裝備屋與寵物扭蛋機彈窗 -->
   <hero-shop-modal
@@ -329,9 +354,9 @@
 </div>
 
 <!-- 版本號 v=8bit_1 強制穿透快取 -->
-<script src="./js/config.js?v=8bit_wide_v14"></script>
-<script src="./js/services.js?v=8bit_wide_v14"></script>
-<script src="./js/components.js?v=8bit_wide_v14"></script>
-<script src="./js/app.js?v=8bit_wide_v14"></script>
+<script src="./js/config.js?v=8bit_wide_v15"></script>
+<script src="./js/services.js?v=8bit_wide_v15"></script>
+<script src="./js/components.js?v=8bit_wide_v15"></script>
+<script src="./js/app.js?v=8bit_wide_v15"></script>
 </body>
 </html>
