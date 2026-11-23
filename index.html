@@ -108,11 +108,28 @@
     .shake-anim { animation: shake 0.4s ease-in-out; }
 
     @keyframes critFlash {
-      0% { box-shadow: 0 0 0px rgba(250, 204, 21, 0), inset 0 0 0px rgba(250, 204, 21, 0); transform: scale(1); }
-      25% { box-shadow: 0 0 32px rgba(250, 204, 21, 0.95), inset 0 0 24px rgba(253, 224, 71, 0.85); transform: scale(1.015); }
-      100% { box-shadow: 0 0 0px rgba(250, 204, 21, 0), inset 0 0 0px rgba(250, 204, 21, 0); transform: scale(1); }
+      0% { box-shadow: 0 0 0px rgba(250, 204, 21, 0); transform: scale(1); }
+      20% { box-shadow: 0 0 40px 10px rgba(250, 204, 21, 0.95); transform: scale(1.02); }
+      55% { box-shadow: 0 0 25px 6px rgba(245, 158, 11, 0.85); transform: scale(1.01); }
+      100% { box-shadow: 0 0 0px rgba(250, 204, 21, 0); transform: scale(1); }
     }
-    .crit-flash-anim { animation: critFlash 0.55s ease-out; }
+    .crit-flash-anim { animation: critFlash 0.85s ease-out; }
+
+    @keyframes screenGoldenBurst {
+      0% { opacity: 0; }
+      15% { opacity: 0.72; }
+      40% { opacity: 0.35; }
+      60% { opacity: 0.65; }
+      100% { opacity: 0; }
+    }
+    .crit-screen-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 60;
+      background: radial-gradient(circle, rgba(254, 240, 138, 0.45) 0%, rgba(250, 204, 21, 0.85) 70%, rgba(234, 88, 12, 0.9) 100%);
+      animation: screenGoldenBurst 0.95s ease-out forwards;
+    }
 
     @keyframes comboPop {
       0% { transform: scale(0.6) rotate(-4deg); opacity: 0; }
@@ -133,6 +150,13 @@
 <body class="pixel-forest-bg min-h-screen overflow-y-auto flex items-start sm:items-center justify-center p-2 sm:p-4 text-slate-900">
 
 <div id="app" class="pixel-box bg-[#fffdf5] w-full max-w-4xl p-4 sm:p-6 landscape-compact-shell my-auto">
+  <!-- 全螢幕會心一擊金光閃爍特效層 -->
+  <div v-if="isCritHit" class="crit-screen-overlay flex items-center justify-center">
+    <div class="combo-pop-anim pixel-box bg-amber-300 border-slate-950 px-6 py-3 text-center">
+      <div class="pixel-en text-xl sm:text-3xl font-extrabold text-rose-600 drop-shadow">💥 CRITICAL HIT! 💥</div>
+      <div class="text-sm sm:text-lg font-extrabold text-slate-950 mt-1">🔥 {{ comboCount }} 連擊！會心一擊 1.5x 暴擊傷害！</div>
+    </div>
+  </div>
   
   <!-- 勇者 RPG 身分狀態列 -->
   <profile-bar 
@@ -140,8 +164,6 @@
     :users="users"
     :today-word-count="todayWordCount"
     :equipped-gear="equippedGear"
-      :combo="comboCount"
-      :is-crit-hit="isCritHit"
     @switch-user="switchUser"
     @open-profile-modal="showProfileModal = true"
     @open-shop-modal="showShopModal = true"
@@ -231,8 +253,6 @@
       :timer="timer"
       :max-timer="maxBossTime"
       :equipped-gear="equippedGear"
-      :combo="comboCount"
-      :is-crit-hit="isCritHit"
       :is-writing-active="isWritingActive"
       :question="currentBossQuestion"
       :question-index="bossQuestionIndex"
@@ -309,9 +329,9 @@
 </div>
 
 <!-- 版本號 v=8bit_1 強制穿透快取 -->
-<script src="./js/config.js?v=8bit_wide_v13"></script>
-<script src="./js/services.js?v=8bit_wide_v13"></script>
-<script src="./js/components.js?v=8bit_wide_v13"></script>
-<script src="./js/app.js?v=8bit_wide_v13"></script>
+<script src="./js/config.js?v=8bit_wide_v14"></script>
+<script src="./js/services.js?v=8bit_wide_v14"></script>
+<script src="./js/components.js?v=8bit_wide_v14"></script>
+<script src="./js/app.js?v=8bit_wide_v14"></script>
 </body>
 </html>
