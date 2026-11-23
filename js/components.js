@@ -3,8 +3,8 @@
 // 1. 頂部勇者 RPG 狀態列
 const ProfileBar = {
   name: 'ProfileBar',
-  props: ['currentUser', 'users', 'todayWordCount'],
-  emits: ['switch-user', 'open-profile-modal'],
+  props: ['currentUser', 'users', 'todayWordCount', 'equippedGear'],
+  emits: ['switch-user', 'open-profile-modal', 'open-shop-modal'],
   template: `
     <div class="pixel-box bg-[#1e293b] text-white px-3 sm:px-4 py-2.5 mb-3 flex flex-wrap items-center justify-between gap-2">
       <div class="flex items-center gap-2.5">
@@ -15,8 +15,21 @@ const ProfileBar = {
           <span v-else>{{ currentUser.avatar || '🧙‍♂️' }}</span>
         </div>
         <div>
-          <div class="flex items-center gap-1.5">
+          <div class="flex flex-wrap items-center gap-1.5">
             <span class="font-bold text-sm sm:text-base tracking-wider text-amber-300">勇者 {{ currentUser.name }}</span>
+            <span v-if="equippedGear && equippedGear.weapon" :title="equippedGear.weapon.name"
+                  class="bg-slate-800 border border-amber-400/70 px-1.5 py-0.2 text-xs">
+              {{ equippedGear.weapon.icon }}
+            </span>
+            <span v-if="equippedGear && equippedGear.shield && equippedGear.shield.id !== 'sh_none'" :title="equippedGear.shield.name"
+                  class="bg-slate-800 border border-sky-400/70 px-1.5 py-0.2 text-xs">
+              {{ equippedGear.shield.icon }}
+            </span>
+            <span v-if="equippedGear && equippedGear.pet" :title="'夥伴：' + equippedGear.pet.name"
+                  class="bg-purple-900/90 border border-purple-300 px-1.5 py-0.2 text-xs flex items-center gap-1 animate-bounce">
+              <span>{{ equippedGear.pet.icon }}</span>
+              <span class="text-[10px] text-purple-200 hidden sm:inline">{{ equippedGear.pet.name }}</span>
+            </span>
           </div>
           <div class="text-[11px] text-emerald-300 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 mt-0.5">
             <span>📅 今日練習: <b class="text-amber-200">{{ todayWordCount }}</b> 字</span>
@@ -34,6 +47,12 @@ const ProfileBar = {
             {{ (u.avatar && u.avatar.startsWith('data:image')) ? '🖼️' : u.avatar }} {{ u.name }}
           </option>
         </select>
+
+        <button @click="$emit('open-shop-modal')" 
+                type="button"
+                class="pixel-btn bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold px-2.5 py-1.5 text-xs flex items-center gap-1">
+          <span>🏪 裝備屋</span>
+        </button>
 
         <button @click="$emit('open-profile-modal')" 
                 type="button"
@@ -1170,7 +1189,7 @@ const SpellTrial = {
 const BossBattle = {
   name: 'BossBattle',
   props: [
-    'gameState', 'bossHp', 'playerHp', 'timer', 'isWritingActive', 'question',
+    'gameState', 'bossHp', 'playerHp', 'timer', 'maxTimer', 'equippedGear', 'isWritingActive', 'question',
     'questionIndex', 'totalQuestions', 'maskedSentence', 'typedWord', 'isRecognizing',
     'lastRecognizedLetter', 'combatMsg', 'combatMsgColor', 'isShaking', 'isListening'
   ],
@@ -1361,7 +1380,19 @@ const BossBattle = {
           <div class="w-full bg-slate-700 h-2.5 border border-white">
             <div class="h-full transition-all duration-1000 linear" 
                  :class="timer <= 10 ? 'bg-rose-500 animate-pulse' : 'bg-amber-400'"
-                 :style="{ width: (timer / 45) * 100 + '%' }"></div>
+                 :style="{ width: Math.min(100, (timer / (maxTimer || 45)) * 100) + '%' }"></div>
+          </div>
+          <!-- 目前出戰裝備與夥伴加成提示 -->
+          <div v-if="equippedGear" class="flex flex-wrap items-center gap-2 pt-1.5 text-[11px] text-sky-200 font-bold">
+            <span class="bg-slate-800 border border-slate-600 px-2 py-0.5">
+              {{ equippedGear.weapon.icon }} {{ equippedGear.weapon.name }} (攻擊 {{ equippedGear.weapon.atkMultiplier }}x)
+            </span>
+            <span v-if="equippedGear.shield.id !== 'sh_none'" class="bg-slate-800 border border-slate-600 px-2 py-0.5">
+              {{ equippedGear.shield.icon }} {{ equippedGear.shield.name }} (減傷 {{ Math.round(equippedGear.shield.dmgReduction * 100) }}%)
+            </span>
+            <span v-if="equippedGear.pet" class="bg-purple-950 border border-purple-400 px-2 py-0.5 text-purple-200">
+              {{ equippedGear.pet.icon }} {{ equippedGear.pet.name }} (勝利 +{{ equippedGear.pet.bonusStar }}★)
+            </span>
           </div>
         </div>
       </div>
@@ -1675,6 +1706,274 @@ const TranslateTool = {
           </div>
           <p class="text-xs sm:text-sm text-slate-800 font-bold leading-relaxed whitespace-pre-line">{{ result.grammar_analysis }}</p>
         </div>
+      </div>
+    </div>
+  `
+};
+
+
+// 11. 勇者裝備屋與像素寵物扭蛋機彈窗
+const HeroShopModal = {
+  name: 'HeroShopModal',
+  props: ['show', 'currentUser'],
+  emits: ['close', 'buy-item', 'equip-item', 'roll-gacha'],
+  setup(props, { emit }) {
+    const { ref, computed } = Vue;
+    const activeTab = ref('weapons'); // 'weapons' | 'shields' | 'pets'
+    const isRolling = ref(false);
+    const gachaResult = ref(null);
+    const shopNotice = ref('');
+
+    const catalog = RPG_CATALOG;
+
+    const inventory = computed(() => {
+      return (props.currentUser && Array.isArray(props.currentUser.inventory))
+        ? props.currentUser.inventory
+        : ['wp_wood', 'sh_none'];
+    });
+
+    const equipped = computed(() => {
+      return (props.currentUser && props.currentUser.equipped)
+        ? props.currentUser.equipped
+        : { weapon: 'wp_wood', shield: 'sh_none', pet: '' };
+    });
+
+    const userStars = computed(() => (props.currentUser ? (props.currentUser.stars || 0) : 0));
+
+    const ownedPetsCount = computed(() => {
+      return catalog.pets.filter(p => inventory.value.includes(p.id)).length;
+    });
+
+    const isOwned = (id) => inventory.value.includes(id);
+
+    const handleBuyOrEquip = (category, item) => {
+      if (isOwned(item.id)) {
+        if (typeof play8BitSfx === 'function') play8BitSfx('click');
+        emit('equip-item', { category, itemId: item.id });
+        shopNotice.value = `✅ 已裝備「${item.icon} ${item.name}」！`;
+      } else {
+        if (userStars.value < item.price) {
+          if (typeof play8BitSfx === 'function') play8BitSfx('hit');
+          shopNotice.value = `❌ 星幣不足！還差 ${item.price - userStars.value} ★，快去背單字賺星幣吧！`;
+          return;
+        }
+        if (typeof play8BitSfx === 'function') play8BitSfx('victory');
+        emit('buy-item', { category, item });
+        shopNotice.value = `🎉 購買並裝備了「${item.icon} ${item.name}」！`;
+        if (window.confetti) confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
+      }
+    };
+
+    const triggerPetGacha = () => {
+      if (isRolling.value) return;
+      if (userStars.value < catalog.gachaCost) {
+        if (typeof play8BitSfx === 'function') play8BitSfx('hit');
+        shopNotice.value = `❌ 轉扭蛋需要 ${catalog.gachaCost} ★（目前僅有 ${userStars.value} ★）！`;
+        return;
+      }
+
+      if (typeof play8BitSfx === 'function') play8BitSfx('click');
+      isRolling.value = true;
+      gachaResult.value = null;
+      shopNotice.value = '';
+
+      setTimeout(() => {
+        // 權重抽獎：未擁有的寵物權重較高，增加收集成就感
+        const pool = [];
+        catalog.pets.forEach(pet => {
+          const owned = isOwned(pet.id);
+          let weight = pet.rarity === 'SSR' ? 1 : (pet.rarity === 'SR' ? 3 : 5);
+          if (!owned) weight *= 2;
+          for (let i = 0; i < weight; i++) pool.push(pet);
+        });
+        const picked = pool[Math.floor(Math.random() * pool.length)];
+        const isNew = !isOwned(picked.id);
+
+        isRolling.value = false;
+        gachaResult.value = { pet: picked, isNew };
+
+        if (typeof play8BitSfx === 'function') play8BitSfx('victory');
+        emit('roll-gacha', { pet: picked, isNew, cost: catalog.gachaCost });
+        if (window.confetti) confetti({ particleCount: 90, spread: 80, origin: { y: 0.6 } });
+      }, 900);
+    };
+
+    return {
+      activeTab, isRolling, gachaResult, shopNotice, catalog,
+      inventory, equipped, userStars, ownedPetsCount,
+      isOwned, handleBuyOrEquip, triggerPetGacha
+    };
+  },
+  template: `
+    <div v-if="show && currentUser" class="fixed inset-0 bg-black/75 z-50 overflow-y-auto flex items-start sm:items-center justify-center p-3">
+      <div class="pixel-box bg-[#fffbeb] w-full max-w-3xl p-4 sm:p-6 max-h-[92vh] overflow-y-auto text-slate-900 my-auto">
+        
+        <!-- 頂部標題與目前持有星幣 -->
+        <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b-4 border-slate-800">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">🏪</span>
+            <div>
+              <h2 class="text-lg sm:text-xl font-bold">勇者裝備屋 & 寵物扭蛋機</h2>
+              <p class="text-[11px] sm:text-xs font-bold text-slate-600">用背單字賺來的星幣強化神兵防具、收集夥伴！</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="pixel-box-sm bg-slate-900 px-3 py-1 text-amber-300 font-bold text-xs sm:text-sm flex items-center gap-1">
+              <span>★ 持有星幣:</span><span class="pixel-en text-base">{{ userStars }}</span>
+            </div>
+            <button @click="$emit('close')" class="pixel-btn bg-rose-500 text-white px-2.5 py-1 text-sm font-bold">✕</button>
+          </div>
+        </div>
+
+        <!-- 分頁切換鍵 -->
+        <div class="grid grid-cols-3 gap-2 mt-4">
+          <button @click="activeTab = 'weapons'; shopNotice = ''" type="button"
+                  :class="activeTab === 'weapons' ? 'bg-rose-400 text-slate-950 -translate-y-0.5' : 'bg-white text-slate-700 hover:bg-slate-100'"
+                  class="pixel-btn py-2.5 text-xs sm:text-sm font-bold">
+            ⚔️ 神兵武器
+          </button>
+          <button @click="activeTab = 'shields'; shopNotice = ''" type="button"
+                  :class="activeTab === 'shields' ? 'bg-sky-400 text-slate-950 -translate-y-0.5' : 'bg-white text-slate-700 hover:bg-slate-100'"
+                  class="pixel-btn py-2.5 text-xs sm:text-sm font-bold">
+            🛡️ 守護防具
+          </button>
+          <button @click="activeTab = 'pets'; shopNotice = ''" type="button"
+                  :class="activeTab === 'pets' ? 'bg-purple-400 text-slate-950 -translate-y-0.5' : 'bg-white text-slate-700 hover:bg-slate-100'"
+                  class="pixel-btn py-2.5 text-xs sm:text-sm font-bold">
+            🥚 寵物扭蛋 ({{ ownedPetsCount }}/{{ catalog.pets.length }})
+          </button>
+        </div>
+
+        <div v-if="shopNotice" class="mt-3 bg-amber-100 border-2 border-slate-900 px-3 py-2 text-xs sm:text-sm font-bold text-slate-900 text-center">
+          {{ shopNotice }}
+        </div>
+
+        <!-- 分頁 1：神兵武器 -->
+        <div v-if="activeTab === 'weapons'" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+          <div v-for="wp in catalog.weapons" :key="wp.id"
+               :class="equipped.weapon === wp.id ? 'bg-amber-100 border-amber-600' : 'bg-white'"
+               class="pixel-box-sm p-3.5 flex flex-col justify-between gap-2.5">
+            <div class="flex items-start gap-3">
+              <div class="pixel-box-sm w-12 h-12 bg-rose-100 flex items-center justify-center text-2xl shrink-0">
+                {{ wp.icon }}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-1">
+                  <span class="font-bold text-sm sm:text-base text-slate-950">{{ wp.name }}</span>
+                  <span v-if="equipped.weapon === wp.id" class="bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5">
+                    裝備中
+                  </span>
+                </div>
+                <p class="text-xs text-slate-700 font-bold mt-1">{{ wp.desc }}</p>
+              </div>
+            </div>
+
+            <button @click="handleBuyOrEquip('weapon', wp)" type="button"
+                    :disabled="equipped.weapon === wp.id"
+                    :class="equipped.weapon === wp.id 
+                      ? 'bg-slate-300 text-slate-600 cursor-default' 
+                      : (isOwned(wp.id) ? 'bg-sky-300 hover:bg-sky-200 text-slate-950' : 'bg-amber-400 hover:bg-amber-300 text-slate-950')"
+                    class="pixel-btn w-full py-2 text-xs sm:text-sm font-bold">
+              <span v-if="equipped.weapon === wp.id">✔️ 目前使用中</span>
+              <span v-else-if="isOwned(wp.id)">🔄 換上此武器</span>
+              <span v-else>💰 {{ wp.price }} ★ 購買</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 分頁 2：守護防具 -->
+        <div v-if="activeTab === 'shields'" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+          <div v-for="sh in catalog.shields" :key="sh.id"
+               :class="equipped.shield === sh.id ? 'bg-amber-100 border-amber-600' : 'bg-white'"
+               class="pixel-box-sm p-3.5 flex flex-col justify-between gap-2.5">
+            <div class="flex items-start gap-3">
+              <div class="pixel-box-sm w-12 h-12 bg-sky-100 flex items-center justify-center text-2xl shrink-0">
+                {{ sh.icon }}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-1">
+                  <span class="font-bold text-sm sm:text-base text-slate-950">{{ sh.name }}</span>
+                  <span v-if="equipped.shield === sh.id" class="bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5">
+                    裝備中
+                  </span>
+                </div>
+                <p class="text-xs text-slate-700 font-bold mt-1">{{ sh.desc }}</p>
+              </div>
+            </div>
+
+            <button @click="handleBuyOrEquip('shield', sh)" type="button"
+                    :disabled="equipped.shield === sh.id"
+                    :class="equipped.shield === sh.id 
+                      ? 'bg-slate-300 text-slate-600 cursor-default' 
+                      : (isOwned(sh.id) ? 'bg-sky-300 hover:bg-sky-200 text-slate-950' : 'bg-amber-400 hover:bg-amber-300 text-slate-950')"
+                    class="pixel-btn w-full py-2 text-xs sm:text-sm font-bold">
+              <span v-if="equipped.shield === sh.id">✔️ 目前穿戴中</span>
+              <span v-else-if="isOwned(sh.id)">🔄 換上此防具</span>
+              <span v-else>💰 {{ sh.price }} ★ 購買</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 分頁 3：寵物扭蛋機與夥伴圖鑑 -->
+        <div v-if="activeTab === 'pets'" class="mt-4 space-y-4">
+          <!-- 扭蛋召喚台 -->
+          <div class="pixel-box-sm bg-purple-100 p-4 text-center space-y-2.5">
+            <div class="text-4xl" :class="isRolling ? 'animate-spin' : 'animate-bounce'">
+              {{ isRolling ? '🔮' : (gachaResult ? gachaResult.pet.icon : '🥚') }}
+            </div>
+
+            <div v-if="isRolling" class="text-sm sm:text-base font-bold text-purple-900 animate-pulse">
+              ✨ 魔法扭蛋旋轉中... 看看會召喚出哪隻神獸！
+            </div>
+
+            <div v-else-if="gachaResult" class="space-y-1">
+              <div class="inline-block bg-amber-300 border-2 border-slate-900 px-2.5 py-0.5 text-xs font-bold">
+                {{ gachaResult.isNew ? '🆕 獲得全新夥伴！' : '✨ 夥伴親密度提升 (+10 ★回饋)！' }}
+                [{{ gachaResult.pet.rarity }}]
+              </div>
+              <h3 class="text-lg font-bold text-purple-950">{{ gachaResult.pet.icon }} {{ gachaResult.pet.name }}</h3>
+              <p class="text-xs font-bold text-slate-700">{{ gachaResult.pet.desc }}</p>
+            </div>
+
+            <div v-else class="space-y-1">
+              <h3 class="text-base font-bold text-purple-950">神秘像素寵物扭蛋機</h3>
+              <p class="text-xs font-bold text-purple-800">召喚夥伴一起出戰，每次通關試煉或擊敗巨龍都能獲得額外星幣加成！</p>
+            </div>
+
+            <button @click="triggerPetGacha" :disabled="isRolling" type="button"
+                    class="pixel-btn bg-purple-500 hover:bg-purple-400 text-white font-bold px-6 py-2.5 text-sm sm:text-base">
+              🎰 轉一次扭蛋 ({{ catalog.gachaCost }} ★)
+            </button>
+          </div>
+
+          <!-- 寵物圖鑑一覽 -->
+          <div class="space-y-2">
+            <div class="text-xs font-bold text-slate-800">🐾 我的夥伴圖鑑（點擊已解鎖夥伴可切換出戰）：</div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              <div v-for="pet in catalog.pets" :key="pet.id"
+                   @click="isOwned(pet.id) && handleBuyOrEquip('pet', pet)"
+                   :class="[
+                     equipped.pet === pet.id ? 'bg-amber-200 border-slate-950' : (isOwned(pet.id) ? 'bg-white cursor-pointer hover:bg-purple-50' : 'bg-slate-200 opacity-60')
+                   ]"
+                   class="pixel-box-sm p-2.5 text-center space-y-1 transition">
+                <div class="flex justify-between items-center text-[10px] font-bold">
+                  <span :class="pet.rarity === 'SSR' ? 'bg-rose-500 text-white' : (pet.rarity === 'SR' ? 'bg-purple-500 text-white' : 'bg-sky-500 text-white')"
+                        class="px-1.5 py-0.2">
+                    {{ pet.rarity }}
+                  </span>
+                  <span v-if="equipped.pet === pet.id" class="text-emerald-700 font-bold">出戰中</span>
+                  <span v-else-if="!isOwned(pet.id)" class="text-slate-500">未解鎖</span>
+                </div>
+                <div class="text-3xl py-1">{{ isOwned(pet.id) ? pet.icon : '❓' }}</div>
+                <div class="text-xs font-bold text-slate-950">{{ isOwned(pet.id) ? pet.name : '神秘夥伴' }}</div>
+                <div class="text-[10px] text-slate-600 font-bold leading-tight">
+                  {{ isOwned(pet.id) ? pet.desc : '透過扭蛋機解鎖' }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   `

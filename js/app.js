@@ -11,7 +11,8 @@ const app = createApp({
     ListenTrial,
     SpellTrial,
     BossBattle,
-    TranslateTool
+    TranslateTool,
+    HeroShopModal
   },
   setup() {
     // 1. 初始化讀取本機快取
@@ -19,6 +20,7 @@ const app = createApp({
     const currentUserId = ref(StorageService.loadActiveUserId());
     const showProfileModal = ref(false);
     const showPracticeModal = ref(false);
+    const showShopModal = ref(false);
 
     const currentUser = computed(() => {
       return users.value.find(u => u.id === currentUserId.value) || users.value[0];
@@ -31,6 +33,73 @@ const app = createApp({
         saveUserData();
       }
     });
+
+    // 目前出戰的武器、防具與寵物夥伴數值
+    const equippedGear = computed(() => {
+      const eq = currentUser.value.equipped || { weapon: 'wp_wood', shield: 'sh_none', pet: '' };
+      const weapon = RPG_CATALOG.weapons.find(w => w.id === eq.weapon) || RPG_CATALOG.weapons[0];
+      const shield = RPG_CATALOG.shields.find(s => s.id === eq.shield) || RPG_CATALOG.shields[0];
+      const pet = eq.pet ? (RPG_CATALOG.pets.find(p => p.id === eq.pet) || null) : null;
+      return { weapon, shield, pet };
+    });
+
+    const maxBossTime = computed(() => {
+      return CONFIG.MAX_BOSS_TIME + (equippedGear.value.shield.extraTime || 0);
+    });
+
+    const ensureInventoryInit = () => {
+      if (!Array.isArray(currentUser.value.inventory)) {
+        currentUser.value.inventory = ['wp_wood', 'sh_none'];
+      }
+      if (!currentUser.value.equipped) {
+        currentUser.value.equipped = { weapon: 'wp_wood', shield: 'sh_none', pet: '' };
+      }
+    };
+
+    const onBuyItem = ({ category, item }) => {
+      ensureInventoryInit();
+      if ((currentUser.value.stars || 0) < item.price) return;
+      currentUser.value.stars -= item.price;
+      if (!currentUser.value.inventory.includes(item.id)) {
+        currentUser.value.inventory.push(item.id);
+      }
+      currentUser.value.equipped[category] = item.id;
+      recordActivityLog({
+        mode: '🏪 裝備屋',
+        detail: `購買並裝備「${item.icon} ${item.name}」`,
+        result: `-${item.price} ★`,
+        isSuccess: true,
+        wordDelta: 0
+      });
+      saveUserData();
+    };
+
+    const onEquipItem = ({ category, itemId }) => {
+      ensureInventoryInit();
+      currentUser.value.equipped[category] = itemId;
+      saveUserData();
+    };
+
+    const onRollGacha = ({ pet, isNew, cost }) => {
+      ensureInventoryInit();
+      if ((currentUser.value.stars || 0) < cost) return;
+      currentUser.value.stars -= cost;
+      if (isNew) {
+        currentUser.value.inventory.push(pet.id);
+      } else {
+        // 重複抽到則退還 10 星幣作為親密度獎勵
+        currentUser.value.stars += 10;
+      }
+      currentUser.value.equipped.pet = pet.id;
+      recordActivityLog({
+        mode: '🥚 寵物扭蛋',
+        detail: `召喚出「${pet.icon} ${pet.name}」[${pet.rarity}]`,
+        result: isNew ? '新夥伴入隊' : '親密 +10★',
+        isSuccess: true,
+        wordDelta: 0
+      });
+      saveUserData();
+    };
 
     // 2. 儲存本機並觸發雲端背景同步
     const saveUserData = () => {
@@ -175,6 +244,8 @@ const app = createApp({
         studiedWords: {},
         wrongWords: {},
         savedWords: [],
+        inventory: ['wp_wood', 'sh_none'],
+        equipped: { weapon: 'wp_wood', shield: 'sh_none', pet: '' },
         streakDays: 0,
         lastStudyDate: '',
         dailyStats: {},
@@ -498,11 +569,13 @@ const app = createApp({
 
     const recordBossVictory = () => {
       currentUser.value.bossVictories = (currentUser.value.bossVictories || 0) + 1;
-      stars.value += 10;
+      const petBonus = equippedGear.value.pet ? equippedGear.value.pet.bonusStar : 0;
+      const totalReward = 10 + petBonus;
+      stars.value += totalReward;
       recordActivityLog({
         mode: '⚔️ 決戰 Boss',
         detail: `擊敗暗黑巨龍 (${selectedUnit.value}，共 ${bossQuizList.value.length} 題)`,
-        result: '勝利 +10★',
+        result: `勝利 +${totalReward}★`,
         isSuccess: true,
         wordDelta: bossQuizList.value.length
       });
@@ -713,7 +786,11 @@ const app = createApp({
             speak(currentTrialWord.value.word);
           } else {
             play8BitSfx('victory');
-            trialFeedback.value = '🏆 恭喜通過聽力試煉！';
+            const petBonus = equippedGear.value.pet ? equippedGear.value.pet.bonusStar : 0;
+            if (petBonus > 0) stars.value += petBonus;
+            trialFeedback.value = petBonus > 0
+              ? `🏆 恭喜通過聽力試煉！（${equippedGear.value.pet.icon} 夥伴額外撿到 +${petBonus} ★）`
+              : '🏆 恭喜通過聽力試煉！';
             recordActivityLog({
               mode: '👂 聽力試煉',
               detail: `完成 ${trialList.value.length} 題聽力測驗 (${selectedUnit.value})`,
@@ -785,7 +862,11 @@ const app = createApp({
             setupSpellingLetters();
           } else {
             play8BitSfx('victory');
-            trialFeedback.value = '🏆 恭喜通過拼字試煉！';
+            const petBonus = equippedGear.value.pet ? equippedGear.value.pet.bonusStar : 0;
+            if (petBonus > 0) stars.value += petBonus;
+            trialFeedback.value = petBonus > 0
+              ? `🏆 恭喜通過拼字試煉！（${equippedGear.value.pet.icon} 夥伴額外撿到 +${petBonus} ★）`
+              : '🏆 恭喜通過拼字試煉！';
             recordActivityLog({
               mode: '🧩 拼字試煉',
               detail: `完成 ${trialList.value.length} 題拼字測驗 (${selectedUnit.value})`,
@@ -934,7 +1015,7 @@ const app = createApp({
 
     const startBossTimer = () => {
       clearInterval(timerInterval);
-      timer.value = CONFIG.MAX_BOSS_TIME;
+      timer.value = maxBossTime.value;
       timerInterval = setInterval(() => {
         if (!isWritingActive.value && !isRecognizing.value) {
           timer.value--;
@@ -954,8 +1035,10 @@ const app = createApp({
       play8BitSfx('hit');
       triggerShake();
       recordWrongWord(currentBossQuestion.value);
-      playerHp.value = Math.max(0, playerHp.value - 20);
-      combatMsg.value = `⏰ 時間到！正確單字是 "${currentBossQuestion.value.word}" (-20 HP)`;
+      const red = equippedGear.value.shield.dmgReduction || 0;
+      const dmgTaken = Math.max(4, Math.round(20 * (1 - red)));
+      playerHp.value = Math.max(0, playerHp.value - dmgTaken);
+      combatMsg.value = `⏰ 時間到！正確單字是 "${currentBossQuestion.value.word}" (-${dmgTaken} HP)`;
       combatMsgColor.value = 'text-rose-600';
       speak(currentBossQuestion.value.word);
       checkBattleStatus(false);
@@ -968,9 +1051,13 @@ const app = createApp({
 
       if (input === target) {
         play8BitSfx('coin');
-        const damage = Math.ceil(100 / bossQuizList.value.length);
+        const mult = equippedGear.value.weapon.atkMultiplier || 1.0;
+        const baseDmg = Math.ceil(100 / bossQuizList.value.length);
+        const damage = Math.ceil(baseDmg * mult);
         bossHp.value = Math.max(0, bossHp.value - damage);
-        combatMsg.value = `🎯 爆擊！對巨龍造成 ${damage} 點傷害！`;
+        combatMsg.value = mult > 1.0
+          ? `🎯 ${equippedGear.value.weapon.icon} ${equippedGear.value.weapon.name}爆擊 (${mult}x)！對巨龍造成 ${damage} 點傷害！`
+          : `🎯 爆擊！對巨龍造成 ${damage} 點傷害！`;
         combatMsgColor.value = 'text-emerald-700';
         speak('Great!');
         recordWordStudied(currentBossQuestion.value.word);
@@ -980,8 +1067,12 @@ const app = createApp({
         play8BitSfx('hit');
         triggerShake();
         recordWrongWord(currentBossQuestion.value);
-        playerHp.value = Math.max(0, playerHp.value - 15);
-        combatMsg.value = `💥 拼寫錯誤（請修正上方紅字）！受到衝擊 -15 HP！`;
+        const red = equippedGear.value.shield.dmgReduction || 0;
+        const dmgTaken = Math.max(3, Math.round(15 * (1 - red)));
+        playerHp.value = Math.max(0, playerHp.value - dmgTaken);
+        combatMsg.value = red > 0
+          ? `💥 拼寫錯誤！${equippedGear.value.shield.icon} 盾牌格擋減傷，僅受 -${dmgTaken} HP！`
+          : `💥 拼寫錯誤（請修正上方紅字）！受到衝擊 -${dmgTaken} HP！`;
         combatMsgColor.value = 'text-rose-600';
         if (playerHp.value <= 0) checkBattleStatus(false);
       }
@@ -1076,7 +1167,8 @@ const app = createApp({
     });
 
     return {
-      users, currentUser, currentUserId, todayWordCount, showProfileModal, showPracticeModal,
+      users, currentUser, currentUserId, todayWordCount, showProfileModal, showPracticeModal, showShopModal,
+      equippedGear, maxBossTime, onBuyItem, onEquipItem, onRollGacha,
       switchUser, onSaveUserSettings, onAddUser, onDeleteUser, onPracticeComplete, onPracticeError,
       currentBookWrongWordsCount, currentWordWrongCount, startWeaknessTraining, clearWrongWords,
       savedWordsCount, isCurrentWordFavorited, toggleFavoriteWord, addSavedWord, updateSavedWord, removeSavedWord, startSavedTraining,

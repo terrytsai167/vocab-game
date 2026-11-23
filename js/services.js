@@ -148,6 +148,8 @@ const StorageService = {
         studiedWords: {},
         wrongWords: {},
         savedWords: [],
+        inventory: ['wp_wood', 'sh_none'],
+        equipped: { weapon: 'wp_wood', shield: 'sh_none', pet: '' },
         streakDays: 0,
         lastStudyDate: '',
         dailyStats: {},
