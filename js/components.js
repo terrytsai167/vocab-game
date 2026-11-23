@@ -1119,14 +1119,20 @@ const StudyMode = {
 // 7. 聽力試煉組件
 const ListenTrial = {
   name: 'ListenTrial',
-  props: ['word', 'trialIndex', 'totalTrials', 'feedback', 'feedbackColor'],
+  props: ['word', 'trialIndex', 'totalTrials', 'combo', 'feedback', 'feedbackColor'],
   emits: ['speak', 'check'],
   template: `
     <div>
       <div class="text-center mb-4">
         <span class="bg-sky-400 text-slate-950 border-2 border-slate-900 text-xs font-bold px-3 py-1">關卡：聽力盲測</span>
         <h2 class="text-lg sm:text-xl font-bold text-slate-900 mt-2">選出發音對應的中文意思！</h2>
-        <p class="pixel-en text-xs text-slate-600 mt-1">{{ trialIndex + 1 }}/{{ totalTrials }}</p>
+        <div class="flex items-center justify-center gap-2 mt-1">
+          <p class="pixel-en text-xs text-slate-600">{{ trialIndex + 1 }}/{{ totalTrials }}</p>
+          <span v-if="combo >= 2" :key="combo"
+                class="combo-pop-anim pixel-en bg-amber-400 text-slate-950 border-2 border-slate-900 px-2.5 py-0.5 text-xs font-bold shadow-[2px_2px_0px_#0f172a]">
+            🔥 {{ combo }} COMBO!
+          </span>
+        </div>
       </div>
       <div v-if="word" class="space-y-4 text-center">
         <div class="pixel-box-sm bg-sky-100 p-5 flex flex-col items-center justify-center">
@@ -1148,14 +1154,20 @@ const ListenTrial = {
 // 8. 拼字試煉組件
 const SpellTrial = {
   name: 'SpellTrial',
-  props: ['word', 'trialIndex', 'totalTrials', 'spelledLetters', 'scrambledPool', 'feedback', 'feedbackColor'],
+  props: ['word', 'trialIndex', 'totalTrials', 'combo', 'spelledLetters', 'scrambledPool', 'feedback', 'feedbackColor'],
   emits: ['speak', 'pick-letter', 'remove-letter', 'reset', 'check'],
   template: `
     <div>
       <div class="text-center mb-4">
         <span class="bg-emerald-400 text-slate-950 border-2 border-slate-900 text-xs font-bold px-3 py-1">關卡：拼字積木</span>
         <h2 class="text-lg sm:text-xl font-bold text-slate-900 mt-2">拼出正確英文單字！</h2>
-        <p class="pixel-en text-xs text-slate-600 mt-1">{{ trialIndex + 1 }}/{{ totalTrials }}</p>
+        <div class="flex items-center justify-center gap-2 mt-1">
+          <p class="pixel-en text-xs text-slate-600">{{ trialIndex + 1 }}/{{ totalTrials }}</p>
+          <span v-if="combo >= 2" :key="combo"
+                class="combo-pop-anim pixel-en bg-amber-400 text-slate-950 border-2 border-slate-900 px-2.5 py-0.5 text-xs font-bold shadow-[2px_2px_0px_#0f172a]">
+            ⚡ {{ combo }} COMBO!
+          </span>
+        </div>
       </div>
       <div v-if="word" class="space-y-4 text-center">
         <div class="pixel-box-sm bg-emerald-100 p-3.5 flex justify-between items-center px-4">
@@ -1189,7 +1201,7 @@ const SpellTrial = {
 const BossBattle = {
   name: 'BossBattle',
   props: [
-    'gameState', 'bossHp', 'playerHp', 'timer', 'maxTimer', 'equippedGear', 'isWritingActive', 'question',
+    'gameState', 'bossHp', 'playerHp', 'timer', 'maxTimer', 'equippedGear', 'combo', 'isCritHit', 'isWritingActive', 'question',
     'questionIndex', 'totalQuestions', 'maskedSentence', 'typedWord', 'isRecognizing',
     'lastRecognizedLetter', 'combatMsg', 'combatMsgColor', 'isShaking', 'isListening'
   ],
@@ -1398,13 +1410,28 @@ const BossBattle = {
       </div>
 
       <!-- 戰鬥進行中 -->
-      <div v-if="gameState === 'playing' && question" class="space-y-3" :class="{ 'shake-anim': isShaking }">
-        <div class="pixel-box-sm bg-white p-3.5 text-center relative">
-          <div class="flex justify-between items-center text-[11px] font-bold text-slate-600 mb-1">
-            <span class="pixel-en">STAGE {{ questionIndex + 1 }}/{{ totalQuestions }}</span>
+      <div v-if="gameState === 'playing' && question"
+           class="space-y-3 transition-all"
+           :class="[{ 'shake-anim': isShaking }, { 'crit-flash-anim': isCritHit }]">
+        <div class="pixel-box-sm p-3.5 text-center relative"
+             :class="isCritHit ? 'bg-amber-50 border-amber-500' : 'bg-white'">
+          <div class="flex flex-wrap justify-between items-center gap-1.5 text-[11px] font-bold text-slate-600 mb-1">
+            <div class="flex items-center gap-2">
+              <span class="pixel-en">STAGE {{ questionIndex + 1 }}/{{ totalQuestions }}</span>
+              <span v-if="combo >= 2" :key="combo"
+                    class="combo-pop-anim pixel-en bg-amber-400 text-slate-950 border-2 border-slate-900 px-2 py-0.5 text-[11px] font-bold">
+                🔥 {{ combo }} COMBO!
+              </span>
+            </div>
             <span class="bg-slate-800 text-amber-300 px-2 py-0.5">
               {{ isTouchDevice ? '📱 手寫板' : '💻 鍵盤' }}
             </span>
+          </div>
+
+          <!-- 會心一擊特效橫幅 -->
+          <div v-if="isCritHit"
+               class="combo-pop-anim my-1.5 inline-block bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 border-2 border-slate-950 px-3.5 py-1 text-xs sm:text-sm font-extrabold text-rose-700 shadow-[3px_3px_0px_#0f172a]">
+            💥 CRITICAL HIT! 會心一擊 1.5x 暴擊傷害！
           </div>
           <h2 class="text-xl sm:text-2xl font-bold text-slate-950 mt-1">{{ question.meaning }}</h2>
           <div class="pixel-en inline-block bg-amber-200 border-2 border-slate-800 text-slate-950 px-3 py-1 text-xs font-bold mt-2">

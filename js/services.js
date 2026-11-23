@@ -29,10 +29,24 @@ function play8BitSfx(type = 'click') {
 
     const now = ctx.currentTime;
 
-    if (type === 'coin' || type === 'correct') {
+    if (type === 'crit') {
+      // 會心一擊四連音高亢暴擊音效
       osc.type = 'square';
-      osc.frequency.setValueAtTime(987.77, now);
-      osc.frequency.setValueAtTime(1318.51, now + 0.08);
+      osc.frequency.setValueAtTime(587.33, now);
+      osc.frequency.setValueAtTime(880.00, now + 0.07);
+      osc.frequency.setValueAtTime(1174.66, now + 0.14);
+      osc.frequency.setValueAtTime(1760.00, now + 0.21);
+      gain.gain.setValueAtTime(0.11, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc.start(now);
+      osc.stop(now + 0.45);
+    } else if (type === 'coin' || type === 'correct') {
+      // 支援連擊音高遞增 (comboCount 越高音調越激昂)
+      const comboStep = Math.min(8, Math.max(0, (arguments[1] || 1) - 1));
+      const pitchMult = Math.pow(1.06, comboStep);
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(987.77 * pitchMult, now);
+      osc.frequency.setValueAtTime(1318.51 * pitchMult, now + 0.08);
       gain.gain.setValueAtTime(0.08, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
       osc.start(now);

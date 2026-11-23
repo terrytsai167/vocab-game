@@ -130,6 +130,8 @@ const app = createApp({
     const trialIndex = ref(0);
     const trialFeedback = ref('');
     const trialFeedbackColor = ref('text-emerald-700');
+    const comboCount = ref(0);
+    const isCritHit = ref(false);
 
     const scrambledPool = ref([]);
     const spelledLetters = ref([]);
@@ -751,6 +753,8 @@ const app = createApp({
       currentMode.value = mode;
       clearInterval(timerInterval);
       trialFeedback.value = '';
+      comboCount.value = 0;
+      isCritHit.value = false;
 
       if (mode === 'trial_listen') initListenTrial();
       else if (mode === 'trial_spell') initSpellTrial();
@@ -776,8 +780,13 @@ const app = createApp({
       recordListenResult(isCorrect);
 
       if (isCorrect) {
-        play8BitSfx('coin');
-        trialFeedback.value = '🎉 聽得真準！ (+1 ★)';
+        comboCount.value++;
+        const comboBonus = (comboCount.value >= 3 && comboCount.value % 3 === 0) ? 1 : 0;
+        if (comboBonus > 0) stars.value += comboBonus;
+        play8BitSfx('coin', comboCount.value);
+        trialFeedback.value = comboCount.value >= 2
+          ? `🔥 ${comboCount.value} COMBO！聽得真準！ (+${1 + comboBonus} ★)`
+          : '🎉 聽得真準！ (+1 ★)';
         trialFeedbackColor.value = 'text-emerald-700';
         setTimeout(() => {
           trialFeedback.value = '';
@@ -802,6 +811,7 @@ const app = createApp({
           }
         }, CONFIG.FEEDBACK_DELAY);
       } else {
+        comboCount.value = 0;
         play8BitSfx('hit');
         recordWrongWord(currentTrialWord.value.word, currentTrialWord.value.correctMeaning);
         trialFeedback.value = '再仔細聽一次發音看看～（已加入弱點本）';
@@ -852,8 +862,13 @@ const app = createApp({
       recordSpellResult(isCorrect);
 
       if (isCorrect) {
-        play8BitSfx('coin');
-        trialFeedback.value = '🎯 拼字完全正確！ (+2 ★)';
+        comboCount.value++;
+        const comboBonus = (comboCount.value >= 3 && comboCount.value % 3 === 0) ? 1 : 0;
+        if (comboBonus > 0) stars.value += comboBonus;
+        play8BitSfx('coin', comboCount.value);
+        trialFeedback.value = comboCount.value >= 2
+          ? `⚡ ${comboCount.value} COMBO！拼字完全正確！ (+${2 + comboBonus} ★)`
+          : '🎯 拼字完全正確！ (+2 ★)';
         trialFeedbackColor.value = 'text-emerald-700';
         setTimeout(() => {
           trialFeedback.value = '';
@@ -878,6 +893,7 @@ const app = createApp({
           }
         }, CONFIG.FEEDBACK_DELAY);
       } else {
+        comboCount.value = 0;
         play8BitSfx('hit');
         recordWrongWord(currentTrialWord.value);
         trialFeedback.value = '拼法不太對，再試一次看看～（已加入弱點本）';
@@ -956,6 +972,8 @@ const app = createApp({
       bossHp.value = 100;
       playerHp.value = 100;
       bossQuestionIndex.value = 0;
+      comboCount.value = 0;
+      isCritHit.value = false;
       bossGameState.value = 'playing';
       combatMsg.value = '';
       bossTypedWord.value = '';
@@ -1032,6 +1050,8 @@ const app = createApp({
     };
 
     const handleBossTimeout = () => {
+      comboCount.value = 0;
+      isCritHit.value = false;
       play8BitSfx('hit');
       triggerShake();
       recordWrongWord(currentBossQuestion.value);
@@ -1050,20 +1070,40 @@ const app = createApp({
       const target = currentBossQuestion.value.word.trim().toLowerCase().replace(/\s+/g, ' ');
 
       if (input === target) {
-        play8BitSfx('coin');
-        const mult = equippedGear.value.weapon.atkMultiplier || 1.0;
+        comboCount.value++;
+        const critActive = comboCount.value >= 3;
+        isCritHit.value = critActive;
+        if (critActive) {
+          setTimeout(() => { isCritHit.value = false; }, 750);
+          play8BitSfx('crit');
+        } else {
+          play8BitSfx('coin', comboCount.value);
+        }
+
+        const weaponMult = equippedGear.value.weapon.atkMultiplier || 1.0;
+        const critMult = critActive ? 1.5 : 1.0;
         const baseDmg = Math.ceil(100 / bossQuizList.value.length);
-        const damage = Math.ceil(baseDmg * mult);
+        const damage = Math.ceil(baseDmg * weaponMult * critMult);
         bossHp.value = Math.max(0, bossHp.value - damage);
-        combatMsg.value = mult > 1.0
-          ? `🎯 ${equippedGear.value.weapon.icon} ${equippedGear.value.weapon.name}爆擊 (${mult}x)！對巨龍造成 ${damage} 點傷害！`
-          : `🎯 爆擊！對巨龍造成 ${damage} 點傷害！`;
-        combatMsgColor.value = 'text-emerald-700';
+
+        if (critActive) {
+          combatMsg.value = `💥 ${comboCount.value} COMBO 會心一擊 (1.5x)！對巨龍造成 ${damage} 點毀滅傷害！`;
+          combatMsgColor.value = 'text-amber-700';
+        } else if (weaponMult > 1.0) {
+          combatMsg.value = `🎯 ${equippedGear.value.weapon.icon} ${equippedGear.value.weapon.name} (${weaponMult}x)！對巨龍造成 ${damage} 點傷害！`;
+          combatMsgColor.value = 'text-emerald-700';
+        } else {
+          combatMsg.value = `🎯 命中！對巨龍造成 ${damage} 點傷害！`;
+          combatMsgColor.value = 'text-emerald-700';
+        }
+
         speak('Great!');
         recordWordStudied(currentBossQuestion.value.word);
         reduceWrongWord(currentBossQuestion.value.word);
         checkBattleStatus(true);
       } else {
+        comboCount.value = 0;
+        isCritHit.value = false;
         play8BitSfx('hit');
         triggerShake();
         recordWrongWord(currentBossQuestion.value);
@@ -1175,7 +1215,7 @@ const app = createApp({
       allAvailableBooks, visibleBookList, isLoading, allRawWords, wordList,
       selectedUnit, unitList, selectedBookId, currentIndex, currentRate,
       stars, currentMode, borderTheme, trialList, trialIndex, trialFeedback,
-      trialFeedbackColor, scrambledPool, spelledLetters, isListening,
+      comboCount, isCritHit, trialFeedbackColor, scrambledPool, spelledLetters, isListening,
       studyFeedback, studyFeedbackColor, bossGameState, bossHp, playerHp,
       timer, isShaking, combatMsg, combatMsgColor, bossQuizList,
       bossQuestionIndex, bossTypedWord, currentWord, currentTrialWord,
