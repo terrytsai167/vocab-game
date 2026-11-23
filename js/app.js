@@ -1074,8 +1074,11 @@ const app = createApp({
         const critActive = comboCount.value >= 3;
         isCritHit.value = critActive;
         if (critActive) {
-          setTimeout(() => { isCritHit.value = false; }, 750);
+          setTimeout(() => { isCritHit.value = false; }, 1100);
           play8BitSfx('crit');
+          if (window.confetti) {
+            confetti({ particleCount: 45, spread: 70, colors: ['#facc15', '#fde047', '#fb923c'], origin: { y: 0.55 } });
+          }
         } else {
           play8BitSfx('coin', comboCount.value);
         }
@@ -1131,13 +1134,29 @@ const app = createApp({
         const target = currentBossQuestion.value.word.toLowerCase().replace(/[^a-z0-9 ]/g, '');
 
         if (spoken === target || spoken.includes(target)) {
-          play8BitSfx('coin');
-          const damage = Math.ceil(100 / bossQuizList.value.length);
+          comboCount.value++;
+          const critActive = comboCount.value >= 3;
+          isCritHit.value = critActive;
+          if (critActive) {
+            setTimeout(() => { isCritHit.value = false; }, 1100);
+            play8BitSfx('crit');
+            if (window.confetti) {
+              confetti({ particleCount: 45, spread: 70, colors: ['#facc15', '#fde047', '#fb923c'], origin: { y: 0.55 } });
+            }
+          } else {
+            play8BitSfx('coin', comboCount.value);
+          }
+          const weaponMult = equippedGear.value.weapon.atkMultiplier || 1.0;
+          const critMult = critActive ? 1.5 : 1.0;
+          const damage = Math.ceil((100 / bossQuizList.value.length) * weaponMult * critMult);
           bossHp.value = Math.max(0, bossHp.value - damage);
-          combatMsg.value = `🎤 音波斬擊成功！造成 ${damage} 點傷害！`;
-          combatMsgColor.value = 'text-purple-700';
+          combatMsg.value = critActive
+            ? `💥 ${comboCount.value} COMBO 音波會心一擊！造成 ${damage} 點暴擊傷害！`
+            : `🎤 音波斬擊成功！造成 ${damage} 點傷害！`;
+          combatMsgColor.value = critActive ? 'text-amber-700' : 'text-purple-700';
           speak('Awesome!');
           recordWordStudied(currentBossQuestion.value.word);
+          reduceWrongWord(currentBossQuestion.value.word);
           checkBattleStatus(true);
         } else {
           play8BitSfx('hit');
