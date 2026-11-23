@@ -31,3 +31,57 @@ const RPG_CATALOG = {
     { id: 'pet_unicorn', name: '星光獨角獸', icon: '🦄', rarity: 'SSR', bonusStar: 3, desc: '傳說神獸！試煉與斬龍額外 +3 ★' }
   ]
 };
+
+
+// ==================== 關卡 Boss 進化圖鑑設定 ====================
+const BOSS_CATALOG = [
+  {
+    id: 'boss_slime',
+    name: '史萊姆王',
+    icon: '🟢',
+    tier: '短單元守護者 (≤5 題)',
+    reward: 10,
+    hpColor: 'bg-emerald-500',
+    desc: '彈跳果凍王，適合快速熱身短單元！'
+  },
+  {
+    id: 'boss_gargoyle',
+    name: '石像鬼守衛',
+    icon: '🗿',
+    tier: '中階試煉者 (6～10 題)',
+    reward: 12,
+    hpColor: 'bg-sky-500',
+    desc: '古老神殿的石翼守衛，考驗穩定記憶力。'
+  },
+  {
+    id: 'boss_dragon',
+    name: '暗黑單字巨龍',
+    icon: '🐉',
+    tier: '長單元霸主 (≥11 題)',
+    reward: 15,
+    hpColor: 'bg-rose-500',
+    desc: '盤踞字島深處的噴火巨龍，長單元最終大魔王！'
+  },
+  {
+    id: 'boss_nightmare',
+    name: '夢魘魔王',
+    icon: '👿',
+    tier: '弱點特訓專屬魔王',
+    reward: 20,
+    hpColor: 'bg-purple-600',
+    desc: '專門吞噬錯題的夢魘魔王！擊敗可獲雙倍 +20 ★ 獎勵！'
+  }
+];
+
+// ==================== 連勝里程碑稱號設定 ====================
+const STREAK_TITLES = [
+  { minDays: 14, title: '字島大賢者', icon: '👑', badgeClass: 'bg-amber-300 text-rose-800 border-amber-500' },
+  { minDays: 7, title: '單字騎士', icon: '🛡️', badgeClass: 'bg-purple-300 text-purple-950 border-purple-500' },
+  { minDays: 3, title: '見習劍士', icon: '⚔️', badgeClass: 'bg-sky-300 text-sky-950 border-sky-500' },
+  { minDays: 0, title: '新手冒險者', icon: '🌱', badgeClass: 'bg-slate-700 text-emerald-200 border-slate-500' }
+];
+
+const DAILY_TREASURE_CONFIG = {
+  targetWords: 10,
+  doubleBonusDurationMs: 5 * 60 * 1000 // 5 分鐘雙倍星幣券
+};

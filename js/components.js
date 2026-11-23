@@ -3,8 +3,8 @@
 // 1. 頂部勇者 RPG 狀態列
 const ProfileBar = {
   name: 'ProfileBar',
-  props: ['currentUser', 'users', 'todayWordCount', 'equippedGear'],
-  emits: ['switch-user', 'open-profile-modal', 'open-shop-modal'],
+  props: ['currentUser', 'users', 'todayWordCount', 'equippedGear', 'streakTitle', 'treasureStatus', 'doubleStarRemainingSec'],
+  emits: ['switch-user', 'open-profile-modal', 'open-shop-modal', 'open-treasure-chest'],
   template: `
     <div class="pixel-box bg-[#1e293b] text-white px-3 sm:px-4 py-2.5 mb-3 flex flex-wrap items-center justify-between gap-2">
       <div class="flex items-center gap-2.5">
@@ -17,6 +17,11 @@ const ProfileBar = {
         <div>
           <div class="flex flex-wrap items-center gap-1.5">
             <span class="font-bold text-sm sm:text-base tracking-wider text-amber-300">勇者 {{ currentUser.name }}</span>
+            <span v-if="streakTitle"
+                  :class="streakTitle.badgeClass"
+                  class="border px-1.5 py-0.2 text-[10px] sm:text-xs font-extrabold shadow-[1px_1px_0px_#0f172a]">
+              {{ streakTitle.icon }} {{ streakTitle.title }}
+            </span>
             <span v-if="equippedGear && equippedGear.weapon" :title="equippedGear.weapon.name"
                   class="bg-slate-800 border border-amber-400/70 px-1.5 py-0.2 text-xs">
               {{ equippedGear.weapon.icon }}
@@ -31,10 +36,22 @@ const ProfileBar = {
               <span class="text-[10px] text-purple-200 hidden sm:inline">{{ equippedGear.pet.name }}</span>
             </span>
           </div>
-          <div class="text-[11px] text-emerald-300 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 mt-0.5">
-            <span>📅 今日練習: <b class="text-amber-200">{{ todayWordCount }}</b> 字</span>
+          <div class="text-[11px] text-emerald-300 flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+            <span>📅 今日: <b class="text-amber-200">{{ todayWordCount }}/10</b> 字</span>
             <span>🔥 連勝: <b class="text-rose-300">{{ currentUser.streakDays || 0 }}</b> 天</span>
-            <span>❤️ 斬龍: {{ currentUser.bossVictories || 0 }} 勝</span>
+            <span v-if="doubleStarRemainingSec > 0"
+                  class="bg-amber-400 text-slate-950 font-extrabold px-1.5 py-0.2 animate-pulse border border-white">
+              ⚡ 雙倍星幣中 ({{ Math.floor(doubleStarRemainingSec / 60) }}:{{ String(doubleStarRemainingSec % 60).padStart(2, '0') }})
+            </span>
+            <button v-if="treasureStatus && treasureStatus.canClaim"
+                    @click="$emit('open-treasure-chest')" type="button"
+                    class="bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold px-2 py-0.5 border border-white animate-bounce cursor-pointer">
+              🎁 開啟今日勇者寶箱！
+            </button>
+            <span v-else-if="treasureStatus && treasureStatus.claimedToday"
+                  class="text-amber-200/90 font-bold">
+              🎁 今日寶箱已領
+            </span>
           </div>
         </div>
       </div>
@@ -217,6 +234,23 @@ const UserProfileModal = {
         days.push({ key, label, count, isToday: i === 0 });
       }
       return days;
+    },
+    bossCatalogList() {
+      const defeated = (this.currentUser && Array.isArray(this.currentUser.defeatedBosses))
+        ? this.currentUser.defeatedBosses
+        : [];
+      return BOSS_CATALOG.map(b => ({
+        ...b,
+        isDefeated: defeated.includes(b.id)
+      }));
+    },
+    streakMilestones() {
+      const cur = (this.currentUser && this.currentUser.streakDays) || 0;
+      return [
+        { days: 3, title: '見習劍士', icon: '⚔️', unlocked: cur >= 3 },
+        { days: 7, title: '單字騎士', icon: '🛡️', unlocked: cur >= 7 },
+        { days: 14, title: '字島大賢者', icon: '👑', unlocked: cur >= 14 }
+      ];
     }
   },
   methods: {
@@ -379,6 +413,42 @@ const UserProfileModal = {
                    :class="day.count > 0 ? 'text-emerald-700' : 'text-slate-300'">
                 {{ day.count }}
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 👾 怪物討伐圖鑑 & 🔥 連勝稱號里程碑 -->
+        <div class="pixel-box-sm mt-4 bg-slate-900 text-white p-3.5 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="text-xs sm:text-sm font-bold text-amber-300">👾 怪物討伐圖鑑（依單元題數進化）</span>
+            <span class="text-[11px] font-bold text-emerald-300">
+              已討伐 {{ bossCatalogList.filter(b => b.isDefeated).length }}/{{ bossCatalogList.length }} 種
+            </span>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+            <div v-for="b in bossCatalogList" :key="b.id"
+                 :class="b.isDefeated ? 'bg-slate-800 border-amber-400' : 'bg-slate-800/50 border-slate-600 opacity-60'"
+                 class="border-2 p-2 space-y-1">
+              <div class="text-2xl">{{ b.isDefeated ? b.icon : '❓' }}</div>
+              <div class="text-xs font-bold" :class="b.isDefeated ? 'text-amber-300' : 'text-slate-400'">
+                {{ b.isDefeated ? b.name : '未討伐魔王' }}
+              </div>
+              <div class="text-[10px] text-slate-300 leading-tight">{{ b.tier }}</div>
+              <div class="text-[10px] font-bold" :class="b.isDefeated ? 'text-emerald-400' : 'text-slate-500'">
+                {{ b.isDefeated ? '✔️ 已收錄 (+' + b.reward + '★)' : '賞金 +' + b.reward + '★' }}
+              </div>
+            </div>
+          </div>
+
+          <!-- 連勝稱號進度 -->
+          <div class="pt-2 border-t border-slate-700 flex flex-wrap items-center justify-between gap-2">
+            <span class="text-[11px] font-bold text-rose-300">🔥 連勝稱號里程碑：</span>
+            <div class="flex flex-wrap gap-1.5">
+              <span v-for="m in streakMilestones" :key="m.days"
+                    :class="m.unlocked ? 'bg-amber-300 text-slate-950 border-white' : 'bg-slate-800 text-slate-400 border-slate-600'"
+                    class="border px-2 py-0.5 text-[11px] font-bold">
+                {{ m.icon }} {{ m.title }} ({{ m.days }}天){{ m.unlocked ? ' ✔️' : '' }}
+              </span>
             </div>
           </div>
         </div>
@@ -1201,7 +1271,7 @@ const SpellTrial = {
 const BossBattle = {
   name: 'BossBattle',
   props: [
-    'gameState', 'bossHp', 'playerHp', 'timer', 'maxTimer', 'equippedGear', 'combo', 'isCritHit', 'isWritingActive', 'question',
+    'gameState', 'bossInfo', 'bossHp', 'playerHp', 'timer', 'maxTimer', 'equippedGear', 'combo', 'isCritHit', 'isWritingActive', 'question',
     'questionIndex', 'totalQuestions', 'maskedSentence', 'typedWord', 'isRecognizing',
     'lastRecognizedLetter', 'combatMsg', 'combatMsgColor', 'isShaking', 'isListening'
   ],
@@ -1361,15 +1431,31 @@ const BossBattle = {
   },
   template: `
     <div>
-      <!-- 8-Bit 戰鬥血條面板 -->
-      <div class="pixel-box-sm space-y-2 mb-3 bg-slate-900 text-white p-3">
+      <!-- 8-Bit 戰鬥血條面板 (含殘血 <30% 狂暴紅色閃爍狀態) -->
+      <div class="pixel-box-sm space-y-2 mb-3 bg-slate-900 text-white p-3 transition-all"
+           :class="bossHp > 0 && bossHp < 30 && gameState === 'playing' ? 'border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.85)]' : ''">
         <div>
-          <div class="flex justify-between items-center text-xs font-bold mb-1 text-rose-400">
-            <span>👾 暗黑單字巨龍</span>
+          <div class="flex flex-wrap justify-between items-center gap-1 text-xs font-bold mb-1"
+               :class="bossHp > 0 && bossHp < 30 ? 'text-rose-300' : 'text-rose-400'">
+            <div class="flex items-center gap-1.5">
+              <span class="text-base">{{ bossInfo ? bossInfo.icon : '🐉' }}</span>
+              <span>{{ bossInfo ? bossInfo.name : '暗黑單字巨龍' }}</span>
+              <span v-if="bossInfo" class="bg-slate-800 border border-slate-600 text-amber-300 px-1.5 py-0.2 text-[10px]">
+                {{ bossInfo.tier }} · 賞金 +{{ bossInfo.reward }}★
+              </span>
+            </div>
             <span class="pixel-en">{{ bossHp }}/100</span>
           </div>
-          <div class="w-full bg-slate-700 h-4 p-0.5 border-2 border-white">
-            <div class="bg-rose-500 h-full transition-all duration-300" :style="{ width: bossHp + '%' }"></div>
+          <div class="w-full bg-slate-700 h-4 p-0.5 border-2 transition-all"
+               :class="bossHp > 0 && bossHp < 30 && gameState === 'playing' ? 'border-rose-500 animate-pulse bg-rose-950' : 'border-white'">
+            <div :class="[bossInfo ? bossInfo.hpColor : 'bg-rose-500', bossHp > 0 && bossHp < 30 ? 'bg-rose-500 animate-pulse' : '']"
+                 class="h-full transition-all duration-300"
+                 :style="{ width: bossHp + '%' }"></div>
+          </div>
+          <!-- 殘血狂暴警告演出 -->
+          <div v-if="bossHp > 0 && bossHp < 30 && gameState === 'playing'"
+               class="mt-1.5 bg-rose-600/90 border border-rose-300 text-white text-[11px] sm:text-xs font-extrabold px-2.5 py-1 text-center animate-pulse">
+            ⚠️ {{ bossInfo ? bossInfo.name : '巨龍' }}進入狂暴狀態！攻擊力提升，快給予最後一擊！
           </div>
         </div>
         <div>
@@ -1514,9 +1600,9 @@ const BossBattle = {
 
       <!-- 勝利畫面 -->
       <div v-else-if="gameState === 'victory'" class="pixel-box-sm bg-amber-100 text-center py-8 px-4 space-y-3">
-        <div class="text-5xl animate-bounce">👑 🏆 ⚔️</div>
-        <h2 class="text-xl sm:text-2xl font-bold text-amber-700">VICTORY! 巨龍被擊敗了！</h2>
-        <p class="text-slate-800 text-xs sm:text-sm font-bold">成功背出所有單字，獲得 +10 ★ 星幣！</p>
+        <div class="text-5xl animate-bounce">👑 {{ bossInfo ? bossInfo.icon : '🐉' }} 🏆</div>
+        <h2 class="text-xl sm:text-2xl font-bold text-amber-700">VICTORY! 「{{ bossInfo ? bossInfo.name : '暗黑單字巨龍' }}」被擊敗了！</h2>
+        <p class="text-slate-800 text-xs sm:text-sm font-bold">成功斬殺魔王並收錄進怪物圖鑑，獲得基礎賞金 +{{ bossInfo ? bossInfo.reward : 10 }} ★ 星幣！</p>
         <button @click="$emit('restart')" class="pixel-btn bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold px-6 py-3 text-sm sm:text-base">
           再次挑戰 ➔
         </button>
@@ -1539,8 +1625,8 @@ const BossBattle = {
 // 10. 即時翻譯與 AI 文法/例句生成器組件 (支援一鍵收藏至我的收藏本)
 const TranslateTool = {
   name: 'TranslateTool',
-  props: ['savedWords'],
-  emits: ['speak', 'toggle-favorite'],
+  props: ['savedWords', 'treasureTask'],
+  emits: ['speak', 'toggle-favorite', 'set-treasure-task', 'complete-treasure-task', 'clear-treasure-task'],
   setup(props, { emit }) {
     const { ref, computed } = Vue;
     const inputText = ref('');
@@ -1548,6 +1634,36 @@ const TranslateTool = {
     const errorMsg = ref('');
     const result = ref(null);
     const recentHistory = ref([]);
+    const showTaskForm = ref(false);
+    const taskClueInput = ref('');
+    const taskRewardInput = ref(10);
+    const taskJustCompleted = ref(false);
+
+    const presetClues = [
+      { clue: '會隨著環境變色的爬蟲類「變色龍」', reward: 10 },
+      { clue: '遊樂園裡最刺激的「雲霄飛車」', reward: 10 },
+      { clue: '太空人搭乘前往宇宙的「太空梭」', reward: 12 },
+      { clue: '保護地球免受紫外線傷害的「臭氧層」', reward: 15 }
+    ];
+
+    const createTreasureTask = () => {
+      const c = taskClueInput.value.trim();
+      if (!c) return;
+      if (typeof play8BitSfx === 'function') play8BitSfx('coin');
+      emit('set-treasure-task', {
+        clue: c,
+        reward: Number(taskRewardInput.value) || 10,
+        createdAt: Date.now()
+      });
+      taskClueInput.value = '';
+      showTaskForm.value = false;
+      taskJustCompleted.value = false;
+    };
+
+    const pickPresetClue = (item) => {
+      taskClueInput.value = item.clue;
+      taskRewardInput.value = item.reward;
+    };
 
     const isFavorited = computed(() => {
       if (!result.value || !result.value.word || !Array.isArray(props.savedWords)) return false;
@@ -1591,6 +1707,7 @@ const TranslateTool = {
 
     const handleSaveToggle = () => {
       if (!result.value) return;
+      const wasFavorited = isFavorited.value;
       emit('toggle-favorite', {
         word: result.value.word,
         pos: result.value.pos || '',
@@ -1599,6 +1716,11 @@ const TranslateTool = {
         sentence: result.value.sentence || '',
         sentence_cn: result.value.sentence_cn || ''
       });
+      // 若目前有進行中的「單字尋寶任務」，且剛完成查詢＋加入收藏，自動完成尋寶並領取懸賞星幣！
+      if (!wasFavorited && props.treasureTask && !props.treasureTask.completed) {
+        taskJustCompleted.value = true;
+        emit('complete-treasure-task', result.value.word);
+      }
     };
 
     const selectHistoryItem = (item) => {
@@ -1620,21 +1742,74 @@ const TranslateTool = {
 
     return {
       inputText, isLoading, errorMsg, result, recentHistory,
+      showTaskForm, taskClueInput, taskRewardInput, taskJustCompleted,
+      presetClues, createTreasureTask, pickPresetClue,
       isFavorited, handleTranslate, clearInput, handleSaveToggle,
       selectHistoryItem, getPosBadgeStyle
     };
   },
   template: `
     <div class="space-y-4">
-      <!-- 頂部說明橫幅 -->
+      <!-- 頂部說明橫幅與家長出題按鈕 -->
       <div class="pixel-box-sm bg-purple-100 p-3 flex flex-wrap items-center justify-between gap-2">
         <div class="flex items-center gap-2">
           <span class="text-xl">🌐</span>
           <div>
             <h2 class="text-sm sm:text-base font-bold text-purple-950">AI 即時翻譯與文法魔法書</h2>
-            <p class="text-xs text-purple-800 font-bold">輸入英文或中文（單字、片語或句子），自動產生翻譯、例句與文法解析！</p>
+            <p class="text-xs text-purple-800 font-bold">輸入英文或中文自動產生翻譯、例句與文法解析，查完一鍵收進收藏本！</p>
           </div>
         </div>
+        <button @click="showTaskForm = !showTaskForm" type="button"
+                class="pixel-btn bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold px-3 py-1.5 text-xs flex items-center gap-1">
+          <span>🗺️ {{ showTaskForm ? '收合出題' : '家長出尋寶謎題' }}</span>
+        </button>
+      </div>
+
+      <!-- 🗺️ 單字尋寶任務面板 -->
+      <div v-if="showTaskForm" class="pixel-box-sm bg-amber-50 p-3.5 space-y-2.5 text-xs">
+        <div class="font-bold text-amber-950">🧭 設定今日單字尋寶謎題（孩子查出英文並點擊「☆ 收藏單字」即可領獎）：</div>
+        <div class="flex flex-wrap gap-1.5">
+          <button v-for="(p, i) in presetClues" :key="i" @click="pickPresetClue(p)" type="button"
+                  class="bg-white hover:bg-amber-200 border border-slate-700 px-2 py-1 font-bold text-slate-800">
+            💡 {{ p.clue }} (+{{ p.reward }}★)
+          </button>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <input v-model="taskClueInput" type="text" placeholder="輸入尋寶謎題線索，如：去查查看『變色龍』的英文！"
+                 class="pixel-input flex-1 bg-white px-3 py-1.5 font-bold text-slate-900">
+          <select v-model="taskRewardInput" class="pixel-select bg-white px-2.5 py-1.5 font-bold text-slate-900">
+            <option :value="5">賞金 +5 ★</option>
+            <option :value="10">賞金 +10 ★</option>
+            <option :value="15">賞金 +15 ★</option>
+            <option :value="20">賞金 +20 ★</option>
+          </select>
+          <button @click="createTreasureTask" type="button"
+                  class="pixel-btn bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold px-4 py-1.5">
+            發布任務
+          </button>
+        </div>
+      </div>
+
+      <!-- 目前進行中的尋寶任務懸賞令 -->
+      <div v-if="treasureTask" class="pixel-box-sm bg-gradient-to-r from-amber-200 to-yellow-100 p-3 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-start gap-2.5">
+          <span class="text-2xl">{{ treasureTask.completed ? '🏆' : '🗺️' }}</span>
+          <div>
+            <div class="text-xs font-extrabold text-amber-950 flex items-center gap-1.5">
+              <span>{{ treasureTask.completed ? '🎉 尋寶任務達成！' : '🔥 單字尋寶懸賞令進行中：' }}</span>
+              <span class="bg-rose-500 text-white px-1.5 py-0.2 text-[10px]">賞金 +{{ treasureTask.reward }} ★</span>
+            </div>
+            <p class="text-xs sm:text-sm font-bold text-slate-900 mt-0.5">
+              謎題：「{{ treasureTask.clue }}」
+              <span v-if="!treasureTask.completed" class="text-purple-800">（查出單字後點擊右上角「☆ 收藏單字」完成任務！）</span>
+              <span v-else class="text-emerald-700">（已成功尋獲寶藏單字：{{ treasureTask.foundWord }}！）</span>
+            </p>
+          </div>
+        </div>
+        <button @click="$emit('clear-treasure-task')" type="button"
+                class="pixel-btn bg-white hover:bg-slate-200 text-slate-700 font-bold px-2.5 py-1 text-xs">
+          清除
+        </button>
       </div>
 
       <!-- 輸入與查詢區 -->

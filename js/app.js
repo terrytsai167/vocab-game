@@ -34,6 +34,114 @@ const app = createApp({
       }
     });
 
+    // ==================== 🔥 連勝稱號、每日寶箱 & 5分鐘雙倍星幣券 ====================
+    const nowTimestamp = ref(Date.now());
+    let globalClockInterval = null;
+    const treasureChestPopup = ref(null);
+
+    const doubleStarRemainingSec = computed(() => {
+      const until = (currentUser.value.treasureState && currentUser.value.treasureState.doubleUntil) || 0;
+      const diff = Math.ceil((until - nowTimestamp.value) / 1000);
+      return diff > 0 ? diff : 0;
+    });
+
+    // 自動套用雙倍星幣券加成的給星函式
+    const awardStars = (baseAmount) => {
+      if (!baseAmount || baseAmount <= 0) return 0;
+      const mult = doubleStarRemainingSec.value > 0 ? 2 : 1;
+      const finalGain = baseAmount * mult;
+      currentUser.value.stars = (currentUser.value.stars || 0) + finalGain;
+      saveUserData();
+      return finalGain;
+    };
+
+    const streakTitle = computed(() => {
+      const days = currentUser.value.streakDays || 0;
+      return STREAK_TITLES.find(t => days >= t.minDays) || STREAK_TITLES[STREAK_TITLES.length - 1];
+    });
+
+    const treasureStatus = computed(() => {
+      const todayKey = getTodayDateKey();
+      const tState = currentUser.value.treasureState || {};
+      const claimedToday = tState.lastClaimedDate === todayKey;
+      const canClaim = (todayWordCount.value >= DAILY_TREASURE_CONFIG.targetWords) && !claimedToday;
+      return { canClaim, claimedToday };
+    });
+
+    const openDailyTreasureChest = () => {
+      if (!treasureStatus.value.canClaim) return;
+      play8BitSfx('victory');
+      if (window.confetti) {
+        confetti({ particleCount: 120, spread: 85, origin: { y: 0.55 } });
+      }
+
+      const todayKey = getTodayDateKey();
+      if (!currentUser.value.treasureState) {
+        currentUser.value.treasureState = { lastClaimedDate: '', doubleUntil: 0, lastRewardText: '' };
+      }
+      currentUser.value.treasureState.lastClaimedDate = todayKey;
+
+      // 隨機開出：70% 機率獲得 5~15 ★ 星幣；30% 機率獲得「5分鐘雙倍星幣券 + 5 ★」
+      const roll = Math.random();
+      let rewardTitle = '';
+      let rewardDesc = '';
+      if (roll < 0.7) {
+        const bonusCoins = Math.floor(Math.random() * 11) + 5; // 5 ~ 15
+        currentUser.value.stars = (currentUser.value.stars || 0) + bonusCoins;
+        rewardTitle = `💰 獲得 ${bonusCoins} 顆閃亮星幣！`;
+        rewardDesc = '恭喜完成今日 10 字學習目標，繼續保持連勝紀錄吧！';
+      } else {
+        currentUser.value.stars = (currentUser.value.stars || 0) + 5;
+        currentUser.value.treasureState.doubleUntil = Date.now() + DAILY_TREASURE_CONFIG.doubleBonusDurationMs;
+        rewardTitle = '⚡ 雙倍星幣券（5 分鐘）＋ 5 ★！';
+        rewardDesc = '接下來 5 分鐘內，所有練習與試煉獲得的星幣全部翻倍！';
+      }
+
+      currentUser.value.treasureState.lastRewardText = rewardTitle;
+      treasureChestPopup.value = { title: rewardTitle, desc: rewardDesc };
+
+      recordActivityLog({
+        mode: '🎁 每日勇者寶箱',
+        detail: '完成今日 10 字練習任務開啟寶箱',
+        result: rewardTitle,
+        isSuccess: true,
+        wordDelta: 0
+      });
+      saveUserData();
+    };
+
+    // ==================== 🗺️ 單字尋寶任務管理 ====================
+    const setTreasureTask = (taskObj) => {
+      currentUser.value.treasureHuntTask = { ...taskObj, completed: false, foundWord: '' };
+      saveUserData();
+    };
+
+    const completeTreasureTask = (foundWord) => {
+      const task = currentUser.value.treasureHuntTask;
+      if (!task || task.completed) return;
+      play8BitSfx('victory');
+      if (window.confetti) {
+        confetti({ particleCount: 100, spread: 80, origin: { y: 0.55 } });
+      }
+      const gained = awardStars(task.reward || 10);
+      task.completed = true;
+      task.foundWord = foundWord;
+      recordActivityLog({
+        mode: '🗺️ 單字尋寶',
+        detail: `解開謎題「${task.clue}」➔ ${foundWord}`,
+        result: `尋寶成功 +${gained}★`,
+        isSuccess: true,
+        wordDelta: 1
+      });
+      saveUserData();
+    };
+
+    const clearTreasureTask = () => {
+      play8BitSfx('click');
+      currentUser.value.treasureHuntTask = null;
+      saveUserData();
+    };
+
     // 目前出戰的武器、防具與寵物夥伴數值
     const equippedGear = computed(() => {
       const eq = currentUser.value.equipped || { weapon: 'wp_wood', shield: 'sh_none', pet: '' };
@@ -159,6 +267,17 @@ const app = createApp({
     const currentTrialWord = computed(() => trialList.value[trialIndex.value]);
     const currentBossQuestion = computed(() => bossQuizList.value[bossQuestionIndex.value]);
 
+    // 依單元模式與題數自動指派不同階級 Boss
+    const currentBossInfo = computed(() => {
+      if (selectedUnit.value === 'WRONG_ONLY') {
+        return BOSS_CATALOG.find(b => b.id === 'boss_nightmare');
+      }
+      const count = bossQuizList.value.length || wordList.value.length || 0;
+      if (count <= 5) return BOSS_CATALOG.find(b => b.id === 'boss_slime');
+      if (count <= 10) return BOSS_CATALOG.find(b => b.id === 'boss_gargoyle');
+      return BOSS_CATALOG.find(b => b.id === 'boss_dragon');
+    });
+
     const unitList = computed(() => {
       const units = allRawWords.value
         .map(w => w.unit ? String(w.unit).trim() : '未分類')
@@ -248,6 +367,9 @@ const app = createApp({
         savedWords: [],
         inventory: ['wp_wood', 'sh_none'],
         equipped: { weapon: 'wp_wood', shield: 'sh_none', pet: '' },
+        defeatedBosses: [],
+        treasureState: { lastClaimedDate: '', doubleUntil: 0, lastRewardText: '' },
+        treasureHuntTask: null,
         streakDays: 0,
         lastStudyDate: '',
         dailyStats: {},
@@ -536,18 +658,18 @@ const app = createApp({
     };
 
     const onPracticeComplete = (payload) => {
+      const gained = awardStars(3);
       if (payload && payload.word) {
         recordWordStudied(payload.word);
         reduceWrongWord(payload.word);
         recordActivityLog({
           mode: '✍️ 默寫特訓',
           detail: `${payload.word} (完成 ${payload.count || 3} 次)`,
-          result: '通過 +3★',
+          result: `通過 +${gained}★`,
           isSuccess: true,
           wordDelta: 1
         });
       }
-      stars.value += 3;
       saveUserData();
     };
 
@@ -555,7 +677,7 @@ const app = createApp({
       currentUser.value.listenAttempts = (currentUser.value.listenAttempts || 0) + 1;
       if (isCorrect) {
         currentUser.value.listenCorrect = (currentUser.value.listenCorrect || 0) + 1;
-        stars.value += 1;
+        awardStars(1);
       }
       saveUserData();
     };
@@ -564,20 +686,26 @@ const app = createApp({
       currentUser.value.spellAttempts = (currentUser.value.spellAttempts || 0) + 1;
       if (isCorrect) {
         currentUser.value.spellCorrect = (currentUser.value.spellCorrect || 0) + 1;
-        stars.value += 2;
+        awardStars(2);
       }
       saveUserData();
     };
 
     const recordBossVictory = () => {
       currentUser.value.bossVictories = (currentUser.value.bossVictories || 0) + 1;
+      const boss = currentBossInfo.value || BOSS_CATALOG[2];
+      if (!Array.isArray(currentUser.value.defeatedBosses)) {
+        currentUser.value.defeatedBosses = [];
+      }
+      if (!currentUser.value.defeatedBosses.includes(boss.id)) {
+        currentUser.value.defeatedBosses.push(boss.id);
+      }
       const petBonus = equippedGear.value.pet ? equippedGear.value.pet.bonusStar : 0;
-      const totalReward = 10 + petBonus;
-      stars.value += totalReward;
+      const gained = awardStars(boss.reward + petBonus);
       recordActivityLog({
         mode: '⚔️ 決戰 Boss',
-        detail: `擊敗暗黑巨龍 (${selectedUnit.value}，共 ${bossQuizList.value.length} 題)`,
-        result: `勝利 +${totalReward}★`,
+        detail: `擊敗「${boss.icon} ${boss.name}」(${selectedUnit.value}，共 ${bossQuizList.value.length} 題)`,
+        result: `勝利 +${gained}★`,
         isSuccess: true,
         wordDelta: bossQuizList.value.length
       });
@@ -1056,7 +1184,8 @@ const app = createApp({
       triggerShake();
       recordWrongWord(currentBossQuestion.value);
       const red = equippedGear.value.shield.dmgReduction || 0;
-      const dmgTaken = Math.max(4, Math.round(20 * (1 - red)));
+      const berserkMult = (bossHp.value > 0 && bossHp.value < 30) ? 1.35 : 1.0;
+      const dmgTaken = Math.max(4, Math.round(20 * berserkMult * (1 - red)));
       playerHp.value = Math.max(0, playerHp.value - dmgTaken);
       combatMsg.value = `⏰ 時間到！正確單字是 "${currentBossQuestion.value.word}" (-${dmgTaken} HP)`;
       combatMsgColor.value = 'text-rose-600';
@@ -1111,7 +1240,8 @@ const app = createApp({
         triggerShake();
         recordWrongWord(currentBossQuestion.value);
         const red = equippedGear.value.shield.dmgReduction || 0;
-        const dmgTaken = Math.max(3, Math.round(15 * (1 - red)));
+        const berserkMult = (bossHp.value > 0 && bossHp.value < 30) ? 1.35 : 1.0;
+        const dmgTaken = Math.max(3, Math.round(15 * berserkMult * (1 - red)));
         playerHp.value = Math.max(0, playerHp.value - dmgTaken);
         combatMsg.value = red > 0
           ? `💥 拼寫錯誤！${equippedGear.value.shield.icon} 盾牌格擋減傷，僅受 -${dmgTaken} HP！`
@@ -1219,15 +1349,21 @@ const app = createApp({
 
     onMounted(() => {
       initData();
+      globalClockInterval = setInterval(() => {
+        nowTimestamp.value = Date.now();
+      }, 1000);
     });
 
     onUnmounted(() => {
       clearInterval(timerInterval);
+      clearInterval(globalClockInterval);
     });
 
     return {
       users, currentUser, currentUserId, todayWordCount, showProfileModal, showPracticeModal, showShopModal,
-      equippedGear, maxBossTime, onBuyItem, onEquipItem, onRollGacha,
+      equippedGear, maxBossTime, currentBossInfo, streakTitle, treasureStatus, doubleStarRemainingSec,
+      treasureChestPopup, openDailyTreasureChest, setTreasureTask, completeTreasureTask, clearTreasureTask,
+      onBuyItem, onEquipItem, onRollGacha,
       switchUser, onSaveUserSettings, onAddUser, onDeleteUser, onPracticeComplete, onPracticeError,
       currentBookWrongWordsCount, currentWordWrongCount, startWeaknessTraining, clearWrongWords,
       savedWordsCount, isCurrentWordFavorited, toggleFavoriteWord, addSavedWord, updateSavedWord, removeSavedWord, startSavedTraining,
