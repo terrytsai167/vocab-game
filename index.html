@@ -125,8 +125,10 @@
     :current-user="currentUser" 
     :users="users"
     :today-word-count="todayWordCount"
+    :equipped-gear="equippedGear"
     @switch-user="switchUser"
     @open-profile-modal="showProfileModal = true"
+    @open-shop-modal="showShopModal = true"
   ></profile-bar>
 
   <!-- 頂部四大模式切換 -->
@@ -209,6 +211,8 @@
       :boss-hp="bossHp"
       :player-hp="playerHp"
       :timer="timer"
+      :max-timer="maxBossTime"
+      :equipped-gear="equippedGear"
       :is-writing-active="isWritingActive"
       :question="currentBossQuestion"
       :question-index="bossQuestionIndex"
@@ -259,6 +263,16 @@
     @remove-saved-word="removeSavedWord"
   ></user-profile-modal>
 
+  <!-- 勇者裝備屋與寵物扭蛋機彈窗 -->
+  <hero-shop-modal
+    :show="showShopModal"
+    :current-user="currentUser"
+    @close="showShopModal = false"
+    @buy-item="onBuyItem"
+    @equip-item="onEquipItem"
+    @roll-gacha="onRollGacha"
+  ></hero-shop-modal>
+
   <!-- 單字默寫特訓彈窗 (5~10次) -->
   <word-practice-modal
     :show="showPracticeModal"
@@ -275,9 +289,9 @@
 </div>
 
 <!-- 版本號 v=8bit_1 強制穿透快取 -->
-<script src="./js/config.js?v=8bit_wide_v11"></script>
-<script src="./js/services.js?v=8bit_wide_v11"></script>
-<script src="./js/components.js?v=8bit_wide_v11"></script>
-<script src="./js/app.js?v=8bit_wide_v11"></script>
+<script src="./js/config.js?v=8bit_wide_v12"></script>
+<script src="./js/services.js?v=8bit_wide_v12"></script>
+<script src="./js/components.js?v=8bit_wide_v12"></script>
+<script src="./js/app.js?v=8bit_wide_v12"></script>
 </body>
 </html>
